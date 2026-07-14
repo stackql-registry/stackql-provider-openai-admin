@@ -127,6 +127,13 @@ for (const [path, item] of Object.entries(doc.paths)) {
 }
 if (stamped) console.log(`Stamped tags on ${stamped} untagged admin_api_keys operation(s)`);
 
+// Re-tag /organization/costs (upstream tags it 'Usage'): costs is its own service in the
+// agreed split - the bucketed idiom is shared but the surface and the FinOps queries differ.
+if (doc.paths['/organization/costs']?.get) {
+  doc.paths['/organization/costs'].get.tags = ['Costs'];
+  console.log("Re-tagged GET /organization/costs 'Usage' -> 'Costs' (own service in the split)");
+}
+
 console.log('Validating filtered spec with @apidevtools/swagger-parser ...');
 await SwaggerParser.validate(structuredClone(doc));
 

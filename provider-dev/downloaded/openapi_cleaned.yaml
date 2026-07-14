@@ -1431,7 +1431,7 @@ paths:
       summary: Get costs details for the organization.
       operationId: usage-costs
       tags:
-        - Usage
+        - Costs
       parameters:
         - name: start_time
           in: query
