@@ -1,0 +1,115 @@
+filename,path,operationId,formatted_op_id,verb,response_object,tags,formatted_tags,stackql_resource_name,stackql_method_name,stackql_verb,stackql_object_key,op_description
+admin_api_keys.yaml,/organization/admin_api_keys,admin-api-keys-list,admin_api_keys_list,get,ApiKeyList,Admin API Keys,admin api keys,admin_api_keys,list,select,$.data,List organization API keys
+admin_api_keys.yaml,/organization/admin_api_keys,admin-api-keys-create,admin_api_keys_create,post,AdminApiKeyCreateResponse,Admin API Keys,admin api keys,admin_api_keys,create,insert,,Create an organization admin API key
+admin_api_keys.yaml,/organization/admin_api_keys/{key_id},admin-api-keys-get,admin_api_keys_get,get,AdminApiKey,Admin API Keys,admin api keys,admin_api_keys,get,select,,Retrieve a single organization API key
+admin_api_keys.yaml,/organization/admin_api_keys/{key_id},admin-api-keys-delete,admin_api_keys_delete,delete,,Admin API Keys,admin api keys,admin_api_keys,delete,delete,,Delete an organization admin API key
+audit_logs.yaml,/organization/audit_logs,list-audit-logs,list_audit_logs,get,ListAuditLogsResponse,Audit Logs,audit logs,audit_logs,list,select,$.data,List user actions and configuration changes within this organization.
+certificates.yaml,/organization/certificates,listOrganizationCertificates,list_organization_certificates,get,ListCertificatesResponse,Certificates,certificates,certificates,list,select,$.data,List uploaded certificates for this organization.
+certificates.yaml,/organization/certificates,uploadCertificate,upload_certificate,post,Certificate,Certificates,certificates,certificates,upload,insert,,"Upload a certificate to the organization. This does **not** automatically activate the certificate.
+
+Organizations can upload up to 50 certificates.
+"
+certificates.yaml,/organization/certificates/activate,activateOrganizationCertificates,activate_organization_certificates,post,OrganizationCertificateActivationResponse,Certificates,certificates,certificates,activate,exec,,"Activate certificates at the organization level.
+
+You can atomically and idempotently activate up to 10 certificates at a time.
+"
+certificates.yaml,/organization/certificates/deactivate,deactivateOrganizationCertificates,deactivate_organization_certificates,post,OrganizationCertificateDeactivationResponse,Certificates,certificates,certificates,deactivate,exec,,"Deactivate certificates at the organization level.
+
+You can atomically and idempotently deactivate up to 10 certificates at a time.
+"
+certificates.yaml,/organization/certificates/{certificate_id},getCertificate,get_certificate,get,Certificate,Certificates,certificates,certificates,get,select,,"Get a certificate that has been uploaded to the organization.
+
+You can get a certificate regardless of whether it is active or not.
+"
+certificates.yaml,/organization/certificates/{certificate_id},modifyCertificate,modify_certificate,post,Certificate,Certificates,certificates,certificates,update,update,,"Modify a certificate. Note that only the name can be modified.
+"
+certificates.yaml,/organization/certificates/{certificate_id},deleteCertificate,delete_certificate,delete,DeleteCertificateResponse,Certificates,certificates,certificates,delete,delete,,"Delete a certificate from the organization.
+
+The certificate must be inactive for the organization and all projects.
+"
+certificates.yaml,/organization/projects/{project_id}/certificates,listProjectCertificates,list_project_certificates,get,ListProjectCertificatesResponse,Certificates,certificates,project_certificates,list,select,$.data,List certificates for this project.
+certificates.yaml,/organization/projects/{project_id}/certificates/activate,activateProjectCertificates,activate_project_certificates,post,OrganizationProjectCertificateActivationResponse,Certificates,certificates,project_certificates,activate,exec,,"Activate certificates at the project level.
+
+You can atomically and idempotently activate up to 10 certificates at a time.
+"
+certificates.yaml,/organization/projects/{project_id}/certificates/deactivate,deactivateProjectCertificates,deactivate_project_certificates,post,OrganizationProjectCertificateDeactivationResponse,Certificates,certificates,project_certificates,deactivate,exec,,"Deactivate certificates at the project level. You can atomically and 
+idempotently deactivate up to 10 certificates at a time.
+"
+costs.yaml,/organization/costs,usage-costs,usage_costs,get,UsageResponse,Costs,costs,costs,list,select,$.data,Get costs details for the organization.
+groups.yaml,/organization/groups,list-groups,list_groups,get,GroupListResource,Groups,groups,groups,list,select,$.data,Lists all groups in the organization.
+groups.yaml,/organization/groups,create-group,create_group,post,GroupResponse,Groups,groups,groups,create,insert,,Creates a new group in the organization.
+groups.yaml,/organization/groups/{group_id},update-group,update_group,post,GroupResourceWithSuccess,Groups,groups,groups,update,update,,Updates a group's information.
+groups.yaml,/organization/groups/{group_id},delete-group,delete_group,delete,GroupDeletedResource,Groups,groups,groups,delete,delete,,Deletes a group from the organization.
+groups.yaml,/organization/groups/{group_id}/roles,list-group-role-assignments,list_group_role_assignments,get,RoleListResource,Group organization role assignments,group organization role assignments,role_assignments,list,select,$.data,Lists the organization roles assigned to a group within the organization.
+groups.yaml,/organization/groups/{group_id}/roles,assign-group-role,assign_group_role,post,GroupRoleAssignment,Group organization role assignments,group organization role assignments,role_assignments,assign,insert,,Assigns an organization role to a group within the organization.
+groups.yaml,/organization/groups/{group_id}/roles/{role_id},unassign-group-role,unassign_group_role,delete,DeletedRoleAssignmentResource,Group organization role assignments,group organization role assignments,role_assignments,unassign,delete,,Unassigns an organization role from a group within the organization.
+groups.yaml,/organization/groups/{group_id}/users,list-group-users,list_group_users,get,UserListResource,Group users,group users,users,list,select,$.data,Lists the users assigned to a group.
+groups.yaml,/organization/groups/{group_id}/users,add-group-user,add_group_user,post,GroupUserAssignment,Group users,group users,users,add,insert,,Adds a user to a group.
+groups.yaml,/organization/groups/{group_id}/users/{user_id},remove-group-user,remove_group_user,delete,GroupUserDeletedResource,Group users,group users,users,remove,delete,,Removes a user from a group.
+invites.yaml,/organization/invites,list-invites,list_invites,get,InviteListResponse,Invites,invites,invites,list,select,$.data,Returns a list of invites in the organization.
+invites.yaml,/organization/invites,inviteUser,invite_user,post,Invite,Invites,invites,invites,create,insert,,Create an invite for a user to the organization. The invite must be accepted by the user before they have access to the organization.
+invites.yaml,/organization/invites/{invite_id},retrieve-invite,retrieve_invite,get,Invite,Invites,invites,invites,get,select,,Retrieves an invite.
+invites.yaml,/organization/invites/{invite_id},delete-invite,delete_invite,delete,InviteDeleteResponse,Invites,invites,invites,delete,delete,,"Delete an invite. If the invite has already been accepted, it cannot be deleted."
+projects.yaml,/organization/projects,list-projects,list_projects,get,ProjectListResponse,Projects,projects,projects,list,select,$.data,Returns a list of projects.
+projects.yaml,/organization/projects,create-project,create_project,post,Project,Projects,projects,projects,create,insert,,"Create a new project in the organization. Projects can be created and archived, but cannot be deleted."
+projects.yaml,/organization/projects/{project_id},retrieve-project,retrieve_project,get,Project,Projects,projects,projects,get,select,,Retrieves a project.
+projects.yaml,/organization/projects/{project_id},modify-project,modify_project,post,Project,Projects,projects,projects,update,update,,Modifies a project in the organization.
+projects.yaml,/organization/projects/{project_id}/api_keys,list-project-api-keys,list_project_api_keys,get,ProjectApiKeyListResponse,Projects,projects,api_keys,list,select,$.data,Returns a list of API keys in the project.
+projects.yaml,/organization/projects/{project_id}/api_keys/{api_key_id},retrieve-project-api-key,retrieve_project_api_key,get,ProjectApiKey,Projects,projects,api_keys,get,select,,Retrieves an API key in the project.
+projects.yaml,/organization/projects/{project_id}/api_keys/{api_key_id},delete-project-api-key,delete_project_api_key,delete,ProjectApiKeyDeleteResponse,Projects,projects,api_keys,delete,delete,,"Deletes an API key from the project.
+
+Returns confirmation of the key deletion, or an error if the key belonged to
+a service account.
+"
+projects.yaml,/organization/projects/{project_id}/archive,archive-project,archive_project,post,Project,Projects,projects,projects,archive,exec,,Archives a project in the organization. Archived projects cannot be used or updated.
+projects.yaml,/organization/projects/{project_id}/groups,list-project-groups,list_project_groups,get,ProjectGroupListResource,Project groups,project groups,groups,list,select,$.data,Lists the groups that have access to a project.
+projects.yaml,/organization/projects/{project_id}/groups,add-project-group,add_project_group,post,ProjectGroup,Project groups,project groups,groups,add,insert,,Grants a group access to a project.
+projects.yaml,/organization/projects/{project_id}/groups/{group_id},remove-project-group,remove_project_group,delete,ProjectGroupDeletedResource,Project groups,project groups,groups,remove,delete,,Revokes a group's access to a project.
+projects.yaml,/organization/projects/{project_id}/rate_limits,list-project-rate-limits,list_project_rate_limits,get,ProjectRateLimitListResponse,Projects,projects,rate_limits,list,select,$.data,Returns the rate limits per model for a project.
+projects.yaml,/organization/projects/{project_id}/rate_limits/{rate_limit_id},update-project-rate-limits,update_project_rate_limits,post,ProjectRateLimit,Projects,projects,rate_limits,update,update,,Updates a project rate limit.
+projects.yaml,/organization/projects/{project_id}/service_accounts,list-project-service-accounts,list_project_service_accounts,get,ProjectServiceAccountListResponse,Projects,projects,service_accounts,list,select,$.data,Returns a list of service accounts in the project.
+projects.yaml,/organization/projects/{project_id}/service_accounts,create-project-service-account,create_project_service_account,post,ProjectServiceAccountCreateResponse,Projects,projects,service_accounts,create,insert,,Creates a new service account in the project. This also returns an unredacted API key for the service account.
+projects.yaml,/organization/projects/{project_id}/service_accounts/{service_account_id},retrieve-project-service-account,retrieve_project_service_account,get,ProjectServiceAccount,Projects,projects,service_accounts,get,select,,Retrieves a service account in the project.
+projects.yaml,/organization/projects/{project_id}/service_accounts/{service_account_id},delete-project-service-account,delete_project_service_account,delete,ProjectServiceAccountDeleteResponse,Projects,projects,service_accounts,delete,delete,,"Deletes a service account from the project.
+
+Returns confirmation of service account deletion, or an error if the project
+is archived (archived projects have no service accounts).
+"
+projects.yaml,/organization/projects/{project_id}/users,list-project-users,list_project_users,get,ProjectUserListResponse,Projects,projects,users,list,select,$.data,Returns a list of users in the project.
+projects.yaml,/organization/projects/{project_id}/users,create-project-user,create_project_user,post,ProjectUser,Projects,projects,users,create,insert,,Adds a user to the project. Users must already be members of the organization to be added to a project.
+projects.yaml,/organization/projects/{project_id}/users/{user_id},retrieve-project-user,retrieve_project_user,get,ProjectUser,Projects,projects,users,get,select,,Retrieves a user in the project.
+projects.yaml,/organization/projects/{project_id}/users/{user_id},modify-project-user,modify_project_user,post,ProjectUser,Projects,projects,users,update,update,,Modifies a user's role in the project.
+projects.yaml,/organization/projects/{project_id}/users/{user_id},delete-project-user,delete_project_user,delete,ProjectUserDeleteResponse,Projects,projects,users,delete,delete,,"Deletes a user from the project.
+
+Returns confirmation of project user deletion, or an error if the project is
+archived (archived projects have no users).
+"
+projects.yaml,/projects/{project_id}/groups/{group_id}/roles,list-project-group-role-assignments,list_project_group_role_assignments,get,RoleListResource,Project group role assignments,project group role assignments,group_role_assignments,list,select,$.data,Lists the project roles assigned to a group within a project.
+projects.yaml,/projects/{project_id}/groups/{group_id}/roles,assign-project-group-role,assign_project_group_role,post,GroupRoleAssignment,Project group role assignments,project group role assignments,group_role_assignments,assign,insert,,Assigns a project role to a group within a project.
+projects.yaml,/projects/{project_id}/groups/{group_id}/roles/{role_id},unassign-project-group-role,unassign_project_group_role,delete,DeletedRoleAssignmentResource,Project group role assignments,project group role assignments,group_role_assignments,unassign,delete,,Unassigns a project role from a group within a project.
+projects.yaml,/projects/{project_id}/users/{user_id}/roles,list-project-user-role-assignments,list_project_user_role_assignments,get,RoleListResource,Project user role assignments,project user role assignments,user_role_assignments,list,select,$.data,Lists the project roles assigned to a user within a project.
+projects.yaml,/projects/{project_id}/users/{user_id}/roles,assign-project-user-role,assign_project_user_role,post,UserRoleAssignment,Project user role assignments,project user role assignments,user_role_assignments,assign,insert,,Assigns a project role to a user within a project.
+projects.yaml,/projects/{project_id}/users/{user_id}/roles/{role_id},unassign-project-user-role,unassign_project_user_role,delete,DeletedRoleAssignmentResource,Project user role assignments,project user role assignments,user_role_assignments,unassign,delete,,Unassigns a project role from a user within a project.
+roles.yaml,/organization/roles,list-roles,list_roles,get,PublicRoleListResource,Roles,roles,roles,list,select,$.data,Lists the roles configured for the organization.
+roles.yaml,/organization/roles,create-role,create_role,post,Role,Roles,roles,roles,create,insert,,Creates a custom role for the organization.
+roles.yaml,/organization/roles/{role_id},update-role,update_role,post,Role,Roles,roles,roles,update,update,,Updates an existing organization role.
+roles.yaml,/organization/roles/{role_id},delete-role,delete_role,delete,RoleDeletedResource,Roles,roles,roles,delete,delete,,Deletes a custom role from the organization.
+roles.yaml,/projects/{project_id}/roles,list-project-roles,list_project_roles,get,PublicRoleListResource,Roles,roles,project_roles,list,select,$.data,Lists the roles configured for a project.
+roles.yaml,/projects/{project_id}/roles,create-project-role,create_project_role,post,Role,Roles,roles,project_roles,create,insert,,Creates a custom role for a project.
+roles.yaml,/projects/{project_id}/roles/{role_id},update-project-role,update_project_role,post,Role,Roles,roles,project_roles,update,update,,Updates an existing project role.
+roles.yaml,/projects/{project_id}/roles/{role_id},delete-project-role,delete_project_role,delete,RoleDeletedResource,Roles,roles,project_roles,delete,delete,,Deletes a custom role from a project.
+usage.yaml,/organization/usage/audio_speeches,usage-audio-speeches,usage_audio_speeches,get,UsageResponse,Usage,usage,audio_speeches,list,select,$.data,Get audio speeches usage details for the organization.
+usage.yaml,/organization/usage/audio_transcriptions,usage-audio-transcriptions,usage_audio_transcriptions,get,UsageResponse,Usage,usage,audio_transcriptions,list,select,$.data,Get audio transcriptions usage details for the organization.
+usage.yaml,/organization/usage/code_interpreter_sessions,usage-code-interpreter-sessions,usage_code_interpreter_sessions,get,UsageResponse,Usage,usage,code_interpreter_sessions,list,select,$.data,Get code interpreter sessions usage details for the organization.
+usage.yaml,/organization/usage/completions,usage-completions,usage_completions,get,UsageResponse,Usage,usage,completions,list,select,$.data,Get completions usage details for the organization.
+usage.yaml,/organization/usage/embeddings,usage-embeddings,usage_embeddings,get,UsageResponse,Usage,usage,embeddings,list,select,$.data,Get embeddings usage details for the organization.
+usage.yaml,/organization/usage/images,usage-images,usage_images,get,UsageResponse,Usage,usage,images,list,select,$.data,Get images usage details for the organization.
+usage.yaml,/organization/usage/moderations,usage-moderations,usage_moderations,get,UsageResponse,Usage,usage,moderations,list,select,$.data,Get moderations usage details for the organization.
+usage.yaml,/organization/usage/vector_stores,usage-vector-stores,usage_vector_stores,get,UsageResponse,Usage,usage,vector_stores,list,select,$.data,Get vector stores usage details for the organization.
+users.yaml,/organization/users,list-users,list_users,get,UserListResponse,Users,users,users,list,select,$.data,Lists all of the users in the organization.
+users.yaml,/organization/users/{user_id},retrieve-user,retrieve_user,get,User,Users,users,users,get,select,,Retrieves a user by their identifier.
+users.yaml,/organization/users/{user_id},modify-user,modify_user,post,User,Users,users,users,update,update,,Modifies a user's role in the organization.
+users.yaml,/organization/users/{user_id},delete-user,delete_user,delete,UserDeleteResponse,Users,users,users,delete,delete,,Deletes a user from the organization.
+users.yaml,/organization/users/{user_id}/roles,list-user-role-assignments,list_user_role_assignments,get,RoleListResource,User organization role assignments,user organization role assignments,role_assignments,list,select,$.data,Lists the organization roles assigned to a user within the organization.
+users.yaml,/organization/users/{user_id}/roles,assign-user-role,assign_user_role,post,UserRoleAssignment,User organization role assignments,user organization role assignments,role_assignments,assign,insert,,Assigns an organization role to a user within the organization.
+users.yaml,/organization/users/{user_id}/roles/{role_id},unassign-user-role,unassign_user_role,delete,DeletedRoleAssignmentResource,User organization role assignments,user organization role assignments,role_assignments,unassign,delete,,Unassigns an organization role from a user within the organization.

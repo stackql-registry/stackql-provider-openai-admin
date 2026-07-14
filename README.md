@@ -26,3 +26,36 @@ npm run fetch-spec -- --check   # drift check against the pin (CI)
 npm run clean-specs             # filter TO the admin surface -> openapi_cleaned.yaml + filter_report.csv
 npm run build-inventory         # endpoint inventory over the filtered spec
 ```
+
+### 1. Split into service specs
+
+Tag-discriminated; the spec's fine-grained tags (15 on the admin surface, plus the untagged admin_api_keys family stamped and `/organization/costs` re-tagged in `clean_specs.mjs`) consolidate to 10 services through `provider-dev/config/service_names.json`:
+
+```bash
+npm run split -- \
+  --provider-name openai_admin \
+  --api-doc provider-dev/downloaded/openapi_cleaned.yaml \
+  --output-dir provider-dev/source \
+  --svc-discriminator tag \
+  --svc-name-overrides "$(cat provider-dev/config/service_names.json | tr -d ' \n')" \
+  --overwrite
+```
+
+Produces 10 service specs in `provider-dev/source/`: `usage` (8 per-capability bucketed resources), `costs`, `projects` (projects, api_keys, service_accounts, users, rate_limits, groups, group_role_assignments, user_role_assignments), `users` (users, role_assignments), `invites`, `groups` (groups, users, role_assignments), `roles` (roles, project_roles), `admin_api_keys`, `audit_logs`, `certificates` (certificates, project_certificates).
+
+### 2. Generate mappings
+
+```bash
+rm -f provider-dev/config/all_services.csv   # analyze appends to an existing CSV
+npm run generate-mappings -- \
+  --provider-name openai_admin \
+  --input-dir provider-dev/source \
+  --output-dir provider-dev/config
+npm run map-operations                        # populate stackql_* columns from the endpoint inventory
+```
+
+`map_operations.mjs` joins `all_services.csv` to `endpoint_inventory.csv` by operationId - one deterministic source of truth for the mapping - and validates coverage in both directions, unique method keys, unique path-param signatures per SQL verb, and object keys on every list method. 81 operations map: 37 `SELECT`, 15 `INSERT`, 8 `UPDATE`, 16 `DELETE`, 5 `EXEC` (project archive, certificate activate/deactivate at both scopes); nothing is skipped.
+
+### Live evidence runbook (blocked on keys)
+
+`node provider-dev/scripts/live_evidence.mjs` captures the phase 1 wire evidence - the key-class check (admin key accepted, standard key rejected), the bucketed `group_by` traversal, the derived-cursor traversal, the audit-log filter pass-through, and (with `--lifecycle`) the `stackql-smoke-<stamp>` project governance lifecycle. It requires `OPENAI_ADMIN_KEY` (and optionally `OPENAI_API_KEY` for the rejection evidence) and writes redacted captures to `provider-dev/evidence/`.
