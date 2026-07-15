@@ -1,0 +1,39 @@
+{
+  "name": "stackql-provider-openai-admin",
+  "version": "0.1.0",
+  "description": "StackQL Provider for the OpenAI organization/administration API",
+  "type": "module",
+  "scripts": {
+    "fetch-spec": "bash ./bin/fetch-spec.sh",
+    "clean-specs": "node ./provider-dev/scripts/clean_specs.mjs",
+    "build-inventory": "node ./provider-dev/scripts/build_inventory.mjs",
+    "split": "bash ./bin/split.sh",
+    "generate-mappings": "bash ./bin/generate-mappings.sh",
+    "map-operations": "node ./provider-dev/scripts/map_operations.mjs",
+    "pre-normalize": "node ./provider-dev/scripts/pre_normalize.mjs",
+    "normalize": "node ./bin/normalize.mjs",
+    "lower-residual-variants": "node ./provider-dev/scripts/lower_residual_variants.mjs",
+    "generate-provider": "node ./bin/generate-provider.mjs",
+    "post-process": "node ./provider-dev/scripts/post_process.mjs",
+    "generate-docs": "bash ./bin/generate-docs.sh",
+    "start-server": "bash ./bin/start-server.sh",
+    "stop-server": "bash ./bin/stop-server.sh",
+    "server-status": "bash ./bin/server-status.sh",
+    "test-meta-routes": "node ./bin/test-meta-routes.cjs"
+  },
+  "dependencies": {
+    "@apidevtools/swagger-parser": "^12.0.0",
+    "@stackql/pgwire-lite": "^1.0.1",
+    "@stackql/provider-utils": "^0.7.6",
+    "js-yaml": "^4.1.0"
+  },
+  "keywords": [
+    "stackql",
+    "openai",
+    "admin",
+    "provider"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

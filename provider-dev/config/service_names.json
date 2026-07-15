@@ -1,0 +1,18 @@
+{
+  "admin_api_keys": "admin_api_keys",
+  "audit_logs": "audit_logs",
+  "certificates": "certificates",
+  "costs": "costs",
+  "group_organization_role_assignments": "groups",
+  "group_users": "groups",
+  "groups": "groups",
+  "invites": "invites",
+  "project_group_role_assignments": "projects",
+  "project_groups": "projects",
+  "project_user_role_assignments": "projects",
+  "projects": "projects",
+  "roles": "roles",
+  "usage": "usage",
+  "user_organization_role_assignments": "users",
+  "users": "users"
+}
