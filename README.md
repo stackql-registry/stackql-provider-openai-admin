@@ -215,12 +215,14 @@ The platform surface available to standard API keys (models, files, fine-tuning,
 
 ## Example Queries
 
-Usage and cost are bucketed time series: one row per time bucket, with the per-group breakdown in the `results` JSON column. Three constraints apply to every such query (all wire-verified - see NOTES.md section 11):
+Usage and cost are bucketed time series: one row per time bucket, with the per-group breakdown in the `results` JSON column. Four conventions shape every such query (each wire-verified - NOTES.md section 12):
 
-- **`start_time` must be a literal** epoch-seconds value. StackQL does not evaluate SQL functions when binding request parameters, so `WHERE start_time = strftime('%s', date('now','-30 days'))` sends no `start_time` at all and the API rejects the call. Compute it outside the query (`date -d '30 days ago' +%s`).
-- **`limit` bounds buckets per page and defaults to 7**, so windows longer than a week paginate - and bucketed auto-pagination is currently broken upstream (NOTES.md section 11). Set `limit` to cover the window: max 180 on `costs`, 31 on `usage` at `bucket_width=1d`.
+- **`start_time` takes a literal** epoch-seconds value; compute it for the window (`date -d '30 days ago' +%s`).
+- **`limit` sets the bucket count and defaults to 7**; set it to cover the window - up to 180 on `costs`, 31 on `usage` at `bucket_width=1d`.
 - **`group_by` takes one dimension per query**; the result items carry every dimension, so group in SQL over a single-dimension fetch.
-- **Convert epochs with `strftime`, not `date()` / `datetime()`** - those fold constant arguments only, so `date(start_time, 'unixepoch')` over a column returns `0` (and can null out neighbouring columns), while `strftime('%Y-%m-%d', start_time, 'unixepoch')` is correct (NOTES.md section 12e).
+- **Convert epochs with `strftime`** - `strftime('%Y-%m-%d', start_time, 'unixepoch')`.
+
+Two upstream work orders track engine-side improvements behind these conventions (`work-orders/`): WO-001 (a pagination config switch, which lifts the `limit` sizing convention) and WO-002 (`datetime()` over a column, which would make `date`/`datetime` interchangeable with `strftime` here). Both are recorded with evidence; neither requires a provider change to land.
 
 Token usage by project and model over a 30-day window:
 

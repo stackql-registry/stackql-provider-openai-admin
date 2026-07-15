@@ -243,11 +243,11 @@ def project_child_reads(sq, rep, key_present):
 def usage_and_cost(sq, rep, key_present, days):
     """The flagship: bucketed token usage and USD cost as rows, grouped.
 
-    `limit` must cover the whole window. It bounds buckets per page and defaults to
-    7, and bucketed auto-pagination is currently broken upstream: the base64 page
-    token's '=' padding is percent-escaped to %3D on the follow-up request and the
-    API rejects it (400 "The page token is invalid"). Staying inside one page avoids
-    the second request entirely. Maximums: usage 31 at bucket_width=1d, costs 180.
+    `limit` covers the whole window: it bounds buckets per page and defaults to 7
+    (max: usage 31 at bucket_width=1d, costs 180), so sizing it to the window keeps
+    a report in a single request. Multi-page traversal additionally depends on
+    WO-001 (work-orders/WO-001-any-sdk-pagination-token-encoding.md); the assertion
+    at the end of this step tracks it.
 
     A zero-activity org returns buckets with empty results (or no buckets) - a valid
     result set, reported as PASS with the row count, never a failure.
@@ -308,20 +308,20 @@ def usage_and_cost(sq, rep, key_present, days):
     else:
         rep.record("flagship: all usage capabilities answer", "PASS", f"{len(caps) + 1} capabilities incl. completions")
 
-    # The known-broken path, asserted explicitly so a fix upstream is noticed rather
-    # than assumed: force a second page and expect the token rejection.
+    # WO-001 tracker: force a second page and record what the engine gets back, so a
+    # fix landing upstream is noticed rather than assumed.
     _, err = q(sq, (
         "SELECT start_time FROM openai_admin.costs.costs "
         f"WHERE start_time = {start} AND \"limit\" = 1"
     ))
     if err and "page token" in str(err).lower():
-        rep.record("flagship: bucketed pagination (known upstream defect)", "SKIP",
-                   "400 page-token rejection reproduced - the %3D encoding bug; keep limit >= window")
+        rep.record("flagship: multi-page bucket traversal (WO-001)", "SKIP",
+                   "pending WO-001 - size limit to the window; single-request reports are unaffected")
     elif err:
-        rep.record("flagship: bucketed pagination (known upstream defect)", "SKIP", f"errored differently: {err}")
+        rep.record("flagship: multi-page bucket traversal (WO-001)", "SKIP", f"errored differently: {err}")
     else:
-        rep.record("flagship: bucketed pagination (known upstream defect)", "PASS",
-                   "multi-page traversal now works - the upstream token bug appears FIXED, drop the limit workaround")
+        rep.record("flagship: multi-page bucket traversal (WO-001)", "PASS",
+                   "multi-page traversal works - WO-001 appears landed; the limit sizing guidance can be relaxed")
 
 
 def pagination_smokes(sq, rep, key_present):

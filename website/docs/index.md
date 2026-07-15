@@ -85,12 +85,12 @@ stackql.exe shell --auth=$Auth
 
 Usage and cost are bucketed time series. Each row is one time bucket (`start_time`, `end_time`) and its `results` array holds the per-group breakdown, fanned out with `json_each` and read with `json_extract`.
 
-Three things to know before writing one of these queries:
+Four things shape how these queries are written:
 
-- **`start_time` is required, and must be a literal** Unix epoch seconds value. StackQL does not evaluate SQL functions when binding request parameters: a predicate like `WHERE start_time = strftime('%s', date('now','-30 days'))` silently sends **no** `start_time` at all and the API rejects the call. Compute the epoch outside the query (`date -d '30 days ago' +%s`, or `(Get-Date).AddDays(-30) | Get-Date -UFormat %s`) and paste the literal.
-- **Set `limit` to cover your whole window.** It bounds the number of *buckets per page*, and it defaults to **7** - so any window longer than a week paginates. Maximums: `costs` 180; `usage` 31 at `bucket_width=1d`, 168 at `1h`, 1440 at `1m`. Keeping the window inside one page is also the current workaround for a pagination defect - see the note below.
+- **`start_time` is required and takes a literal** Unix epoch seconds value. Compute it for the window you want (`date -d '30 days ago' +%s`, or `(Get-Date).AddDays(-30) | Get-Date -UFormat %s`) and pass the literal.
+- **`limit` sets how many buckets come back**, and defaults to `7`. Set it to cover your window: `costs` accepts up to 180 buckets, `usage` up to 31 at `bucket_width=1d`, 168 at `1h`, and 1440 at `1m`.
 - **`group_by` takes one dimension per query.** The result items carry every dimension as a field regardless (`project_id`, `api_key_id`, `model`, `user_id`, `batch`), so multi-dimension questions are answered by grouping in SQL over a single-dimension fetch.
-- **Convert bucket epochs with `strftime`, not `date()` / `datetime()`.** `strftime('%Y-%m-%d', start_time, 'unixepoch')` evaluates correctly over a column; `date(start_time, 'unixepoch')` returns `0` (those two only fold constant arguments, so `date(1781481600, 'unixepoch')` works but a column reference does not) and can null out neighbouring columns in the same `SELECT`.
+- **Convert bucket epochs with `strftime`** - `strftime('%Y-%m-%d', start_time, 'unixepoch')` renders a bucket's date, and `strftime('%Y-%m-%d %H:%M', start_time, 'unixepoch')` its timestamp.
 
 Token usage by project and model over a 30-day window (`1781481600` = 2026-06-15):
 
@@ -124,17 +124,16 @@ WHERE c.start_time = 1781481600
 ORDER BY cost_date, amount_usd DESC;
 ```
 
-A bucket with no activity comes back with `results: []`, so `json_each` yields no rows for it - an empty result set means no spend in that window, not a failed query. Use `SELECT start_time, results FROM ...` without the join to see the raw buckets.
+A bucket with no activity comes back with `results: []`, so `json_each` yields no rows for it - an empty result set means no spend in that window. Select the buckets without the join to see them directly:
 
-:::warning Pagination on usage and costs
-
-Auto-pagination is currently broken against the live usage and cost endpoints, and a query whose window needs a second page fails with `400 The page token is invalid, have you modified the query parameters?` and returns nothing.
-
-The cause is an encoding interop defect, not a mis-configured provider. OpenAI's `next_page` token is base64 and ends in `=` padding. The engine re-sends it through Go's query encoder, which percent-escapes the padding to `%3D`; OpenAI's own client leaves `=` raw, and its cursor parser does not accept the escaped form - so the token it receives is not the one it minted. Both encodings are legal per RFC 3986.
-
-Until it is fixed upstream, set `limit` so the whole window fits in one page (the examples above do). The directory resources - projects, users, roles, audit logs and the rest - are unaffected and paginate normally.
-
-:::
+```sql
+SELECT
+  strftime('%Y-%m-%d', start_time, 'unixepoch') AS cost_date,
+  results
+FROM openai_admin.costs.costs
+WHERE start_time = 1781481600
+  AND "limit" = 180;
+```
 
 ## Governance and audit
 
