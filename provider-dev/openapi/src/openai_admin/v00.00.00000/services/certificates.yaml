@@ -1434,5 +1434,122 @@ components:
         - created_at
         - certificate_details
         - active
+  x-stackQL-resources:
+    certificates:
+      id: openai_admin.certificates.certificates
+      name: certificates
+      title: Certificates
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1certificates/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+        upload:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1certificates/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        activate:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1certificates~1activate/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        deactivate:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1certificates~1deactivate/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        get:
+          operation:
+            $ref: '#/paths/~1organization~1certificates~1{certificate_id}/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        update:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1certificates~1{certificate_id}/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        delete:
+          operation:
+            $ref: '#/paths/~1organization~1certificates~1{certificate_id}/delete'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/certificates/methods/get'
+          - $ref: '#/components/x-stackQL-resources/certificates/methods/list'
+        insert:
+          - $ref: '#/components/x-stackQL-resources/certificates/methods/upload'
+        update:
+          - $ref: '#/components/x-stackQL-resources/certificates/methods/update'
+        delete:
+          - $ref: '#/components/x-stackQL-resources/certificates/methods/delete'
+        replace: []
+    project_certificates:
+      id: openai_admin.certificates.project_certificates
+      name: project_certificates
+      title: Project Certificates
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1certificates/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+        activate:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1certificates~1activate/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        deactivate:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1certificates~1deactivate/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/project_certificates/methods/list'
+        insert: []
+        update: []
+        delete: []
+        replace: []
 servers:
   - url: https://api.openai.com/v1
+x-stackQL-config:
+  pagination:
+    requestToken:
+      key: after
+      location: query
+    responseToken:
+      key: $.last_id
+      location: body

@@ -563,5 +563,57 @@ components:
         - object
         - id
         - deleted
+  x-stackQL-resources:
+    invites:
+      id: openai_admin.invites.invites
+      name: invites
+      title: Invites
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1invites/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+        create:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1invites/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        get:
+          operation:
+            $ref: '#/paths/~1organization~1invites~1{invite_id}/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        delete:
+          operation:
+            $ref: '#/paths/~1organization~1invites~1{invite_id}/delete'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/invites/methods/get'
+          - $ref: '#/components/x-stackQL-resources/invites/methods/list'
+        insert:
+          - $ref: '#/components/x-stackQL-resources/invites/methods/create'
+        update: []
+        delete:
+          - $ref: '#/components/x-stackQL-resources/invites/methods/delete'
+        replace: []
 servers:
   - url: https://api.openai.com/v1
+x-stackQL-config:
+  pagination:
+    requestToken:
+      key: after
+      location: query
+    responseToken:
+      key: $.last_id
+      location: body

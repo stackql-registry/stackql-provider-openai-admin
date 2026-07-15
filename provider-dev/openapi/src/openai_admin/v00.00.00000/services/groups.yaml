@@ -1630,5 +1630,132 @@ components:
         - id
         - name
         - email
+  x-stackQL-resources:
+    groups:
+      id: openai_admin.groups.groups
+      name: groups
+      title: Groups
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1groups/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+        create:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1groups/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        update:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1groups~1{group_id}/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        delete:
+          operation:
+            $ref: '#/paths/~1organization~1groups~1{group_id}/delete'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/groups/methods/list'
+        insert:
+          - $ref: '#/components/x-stackQL-resources/groups/methods/create'
+        update:
+          - $ref: '#/components/x-stackQL-resources/groups/methods/update'
+        delete:
+          - $ref: '#/components/x-stackQL-resources/groups/methods/delete'
+        replace: []
+    role_assignments:
+      id: openai_admin.groups.role_assignments
+      name: role_assignments
+      title: Role Assignments
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1groups~1{group_id}~1roles/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+        assign:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1groups~1{group_id}~1roles/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        unassign:
+          operation:
+            $ref: '#/paths/~1organization~1groups~1{group_id}~1roles~1{role_id}/delete'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/role_assignments/methods/list'
+        insert:
+          - $ref: '#/components/x-stackQL-resources/role_assignments/methods/assign'
+        update: []
+        delete:
+          - $ref: '#/components/x-stackQL-resources/role_assignments/methods/unassign'
+        replace: []
+    users:
+      id: openai_admin.groups.users
+      name: users
+      title: Users
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1groups~1{group_id}~1users/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+        add:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1groups~1{group_id}~1users/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        remove:
+          operation:
+            $ref: '#/paths/~1organization~1groups~1{group_id}~1users~1{user_id}/delete'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/users/methods/list'
+        insert:
+          - $ref: '#/components/x-stackQL-resources/users/methods/add'
+        update: []
+        delete:
+          - $ref: '#/components/x-stackQL-resources/users/methods/remove'
+        replace: []
 servers:
   - url: https://api.openai.com/v1
+x-stackQL-config:
+  pagination:
+    requestToken:
+      key: after
+      location: query
+    responseToken:
+      key: $.next
+      location: body

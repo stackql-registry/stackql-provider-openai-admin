@@ -633,5 +633,57 @@ components:
               "role": "owner"
             }
           }
+  x-stackQL-resources:
+    admin_api_keys:
+      id: openai_admin.admin_api_keys.admin_api_keys
+      name: admin_api_keys
+      title: Admin Api Keys
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1admin_api_keys/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+        create:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1admin_api_keys/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        get:
+          operation:
+            $ref: '#/paths/~1organization~1admin_api_keys~1{key_id}/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        delete:
+          operation:
+            $ref: '#/paths/~1organization~1admin_api_keys~1{key_id}/delete'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/admin_api_keys/methods/get'
+          - $ref: '#/components/x-stackQL-resources/admin_api_keys/methods/list'
+        insert:
+          - $ref: '#/components/x-stackQL-resources/admin_api_keys/methods/create'
+        update: []
+        delete:
+          - $ref: '#/components/x-stackQL-resources/admin_api_keys/methods/delete'
+        replace: []
 servers:
   - url: https://api.openai.com/v1
+x-stackQL-config:
+  pagination:
+    requestToken:
+      key: after
+      location: query
+    responseToken:
+      key: $.last_id
+      location: body

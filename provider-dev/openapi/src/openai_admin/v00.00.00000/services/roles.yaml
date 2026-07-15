@@ -1059,5 +1059,106 @@ components:
               "id": "role_01J1F8ROLE01",
               "deleted": true
           }
+  x-stackQL-resources:
+    roles:
+      id: openai_admin.roles.roles
+      name: roles
+      title: Roles
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1roles/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+        create:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1roles/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        update:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1roles~1{role_id}/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        delete:
+          operation:
+            $ref: '#/paths/~1organization~1roles~1{role_id}/delete'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/roles/methods/list'
+        insert:
+          - $ref: '#/components/x-stackQL-resources/roles/methods/create'
+        update:
+          - $ref: '#/components/x-stackQL-resources/roles/methods/update'
+        delete:
+          - $ref: '#/components/x-stackQL-resources/roles/methods/delete'
+        replace: []
+    project_roles:
+      id: openai_admin.roles.project_roles
+      name: project_roles
+      title: Project Roles
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1projects~1{project_id}~1roles/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+        create:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1projects~1{project_id}~1roles/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        update:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1projects~1{project_id}~1roles~1{role_id}/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        delete:
+          operation:
+            $ref: '#/paths/~1projects~1{project_id}~1roles~1{role_id}/delete'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/project_roles/methods/list'
+        insert:
+          - $ref: '#/components/x-stackQL-resources/project_roles/methods/create'
+        update:
+          - $ref: '#/components/x-stackQL-resources/project_roles/methods/update'
+        delete:
+          - $ref: '#/components/x-stackQL-resources/project_roles/methods/delete'
+        replace: []
 servers:
   - url: https://api.openai.com/v1
+x-stackQL-config:
+  pagination:
+    requestToken:
+      key: after
+      location: query
+    responseToken:
+      key: $.next
+      location: body

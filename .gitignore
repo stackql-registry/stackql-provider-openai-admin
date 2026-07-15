@@ -141,3 +141,11 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# stackql binary and server logs (downloaded/started by bin/start-server.sh)
+stackql
+stackql.exe
+stackql-server.log
+
+# python venv for the smoke tests
+.venv/

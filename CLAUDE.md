@@ -8,7 +8,7 @@ This repository builds and documents the `openai_admin` provider for StackQL - S
 
 **Scope boundary**: everything under `/v1/organization/...` maps here; nothing else does. The platform surface (models, files, fine-tuning, batches, vector stores, assistants, evals) is the sibling `openai` provider, refreshed in its own repository from the same pinned spec source.
 
-Build pipeline and repository pattern follow stackql-registry/stackql-provider-k8s (branch `feature/provider-dev`). Sibling findings reused, not re-derived - anthropic_admin (the whole shape), the openai next-gen build (spec source, envelope, derived cursor), openrouter (key-class documentation treatment), keycloak (REPLACE-vs-UPDATE warning).
+Build pipeline and repository pattern follow the sibling `openai` build (`../stackql-provider-openai`) - the closest peer and this repo's archetype: same spec source, same toolchain, same pipeline stages, same test and docs layout. Other sibling findings reused, not re-derived - anthropic_admin (the whole admin shape), openrouter (key-class documentation treatment), keycloak (REPLACE-vs-UPDATE warning).
 
 ## Positioning context
 
@@ -28,7 +28,7 @@ The same canonical artifact as the sibling `openai` build (`openai/openai-openap
 
 ## Toolchain, layout, pipeline, testing, publishing, docs, CI
 
-Per the anthropic_admin repo with the deltas above; layout, script names, and the four test layers per the k8s reference. Specifics worth pinning:
+Per the sibling `openai` build (`../stackql-provider-openai`) - layout, script names, pipeline stages, and the test layers - with the admin deltas above. Specifics worth pinning:
 
 - Candidate services (inventory decides): `usage` (per-capability usage resources: completions, embeddings, moderations, images, audio, vector_stores, code_interpreter_sessions), `costs`, `projects` (projects, project_users, service_accounts, project_api_keys, rate_limits), `users`, `invites`, `admin_api_keys`, `audit_logs`, `certificates` (if exposed)
 - Pilots: `usage` + `costs` (the bucketed idiom, `group_by[]` on the wire, the flattening decision), `projects` (directory idiom, the governance write lifecycle - a project created, a service account added, archived within the run), `audit_logs` (filter pass-through, derived cursor)
@@ -38,12 +38,12 @@ Per the anthropic_admin repo with the deltas above; layout, script names, and th
 
 ## Writing conventions
 
-Measured, precise, no hyperbole; third-person or passive descriptive framing; the applicability note stated once, up front; no em dashes (use `-`); `->` for arrows; QWERTY-only characters; k8s-README-style runnable examples.
+Measured, precise, no hyperbole; third-person or passive descriptive framing; the applicability note stated once, up front; no em dashes (use `-`); `->` for arrows; QWERTY-only characters; runnable examples in the sibling `openai` README's style.
 
 ## Non-negotiables
 
 1. Latest `@stackql/provider-utils`, always
-2. anthropic_admin is the structural reference; the k8s repo the pattern reference; findings reused, not re-derived
+2. The sibling `openai` build is the pattern reference; anthropic_admin the structural reference for the admin surface; findings reused, not re-derived
 3. Only the `/organization` subtree maps here - the inverse filter is validated
 4. The applicability note (organizations, not individual accounts) appears in the README and docs lead - never buried
 5. Nothing in this provider consumes tokens - usage and cost are read, never generated

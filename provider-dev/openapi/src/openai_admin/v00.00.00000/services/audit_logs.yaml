@@ -1032,5 +1032,33 @@ components:
         id:
           type: string
           description: The service account id.
+  x-stackQL-resources:
+    audit_logs:
+      id: openai_admin.audit_logs.audit_logs
+      name: audit_logs
+      title: Audit Logs
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1audit_logs/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/audit_logs/methods/list'
+        insert: []
+        update: []
+        delete: []
+        replace: []
 servers:
   - url: https://api.openai.com/v1
+x-stackQL-config:
+  pagination:
+    requestToken:
+      key: after
+      location: query
+    responseToken:
+      key: $.last_id
+      location: body

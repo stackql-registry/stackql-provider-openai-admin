@@ -4359,5 +4359,356 @@ components:
               "role": "owner",
               "added_at": 1711471533
           }
+  x-stackQL-resources:
+    projects:
+      id: openai_admin.projects.projects
+      name: projects
+      title: Projects
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1projects/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+        create:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1projects/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        get:
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        update:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        archive:
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1archive/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/projects/methods/get'
+          - $ref: '#/components/x-stackQL-resources/projects/methods/list'
+        insert:
+          - $ref: '#/components/x-stackQL-resources/projects/methods/create'
+        update:
+          - $ref: '#/components/x-stackQL-resources/projects/methods/update'
+        delete: []
+        replace: []
+    api_keys:
+      id: openai_admin.projects.api_keys
+      name: api_keys
+      title: Api Keys
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1api_keys/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+        get:
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1api_keys~1{api_key_id}/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        delete:
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1api_keys~1{api_key_id}/delete'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/api_keys/methods/get'
+          - $ref: '#/components/x-stackQL-resources/api_keys/methods/list'
+        insert: []
+        update: []
+        delete:
+          - $ref: '#/components/x-stackQL-resources/api_keys/methods/delete'
+        replace: []
+    groups:
+      id: openai_admin.projects.groups
+      name: groups
+      title: Groups
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1groups/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+          config:
+            pagination:
+              requestToken:
+                key: after
+                location: query
+              responseToken:
+                key: $.next
+                location: body
+        add:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1groups/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        remove:
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1groups~1{group_id}/delete'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/groups/methods/list'
+        insert:
+          - $ref: '#/components/x-stackQL-resources/groups/methods/add'
+        update: []
+        delete:
+          - $ref: '#/components/x-stackQL-resources/groups/methods/remove'
+        replace: []
+    rate_limits:
+      id: openai_admin.projects.rate_limits
+      name: rate_limits
+      title: Rate Limits
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1rate_limits/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+        update:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1rate_limits~1{rate_limit_id}/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/rate_limits/methods/list'
+        insert: []
+        update:
+          - $ref: '#/components/x-stackQL-resources/rate_limits/methods/update'
+        delete: []
+        replace: []
+    service_accounts:
+      id: openai_admin.projects.service_accounts
+      name: service_accounts
+      title: Service Accounts
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1service_accounts/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+        create:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1service_accounts/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        get:
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1service_accounts~1{service_account_id}/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        delete:
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1service_accounts~1{service_account_id}/delete'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/service_accounts/methods/get'
+          - $ref: '#/components/x-stackQL-resources/service_accounts/methods/list'
+        insert:
+          - $ref: '#/components/x-stackQL-resources/service_accounts/methods/create'
+        update: []
+        delete:
+          - $ref: '#/components/x-stackQL-resources/service_accounts/methods/delete'
+        replace: []
+    users:
+      id: openai_admin.projects.users
+      name: users
+      title: Users
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1users/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+        create:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1users/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        get:
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1users~1{user_id}/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        update:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1users~1{user_id}/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        delete:
+          operation:
+            $ref: '#/paths/~1organization~1projects~1{project_id}~1users~1{user_id}/delete'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/users/methods/get'
+          - $ref: '#/components/x-stackQL-resources/users/methods/list'
+        insert:
+          - $ref: '#/components/x-stackQL-resources/users/methods/create'
+        update:
+          - $ref: '#/components/x-stackQL-resources/users/methods/update'
+        delete:
+          - $ref: '#/components/x-stackQL-resources/users/methods/delete'
+        replace: []
+    group_role_assignments:
+      id: openai_admin.projects.group_role_assignments
+      name: group_role_assignments
+      title: Group Role Assignments
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1projects~1{project_id}~1groups~1{group_id}~1roles/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+          config:
+            pagination:
+              requestToken:
+                key: after
+                location: query
+              responseToken:
+                key: $.next
+                location: body
+        assign:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1projects~1{project_id}~1groups~1{group_id}~1roles/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        unassign:
+          operation:
+            $ref: '#/paths/~1projects~1{project_id}~1groups~1{group_id}~1roles~1{role_id}/delete'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/group_role_assignments/methods/list'
+        insert:
+          - $ref: '#/components/x-stackQL-resources/group_role_assignments/methods/assign'
+        update: []
+        delete:
+          - $ref: '#/components/x-stackQL-resources/group_role_assignments/methods/unassign'
+        replace: []
+    user_role_assignments:
+      id: openai_admin.projects.user_role_assignments
+      name: user_role_assignments
+      title: User Role Assignments
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1projects~1{project_id}~1users~1{user_id}~1roles/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+          config:
+            pagination:
+              requestToken:
+                key: after
+                location: query
+              responseToken:
+                key: $.next
+                location: body
+        assign:
+          config:
+            requestBodyTranslate:
+              algorithm: naive
+          operation:
+            $ref: '#/paths/~1projects~1{project_id}~1users~1{user_id}~1roles/post'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+        unassign:
+          operation:
+            $ref: '#/paths/~1projects~1{project_id}~1users~1{user_id}~1roles~1{role_id}/delete'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/user_role_assignments/methods/list'
+        insert:
+          - $ref: '#/components/x-stackQL-resources/user_role_assignments/methods/assign'
+        update: []
+        delete:
+          - $ref: '#/components/x-stackQL-resources/user_role_assignments/methods/unassign'
+        replace: []
 servers:
   - url: https://api.openai.com/v1
+x-stackQL-config:
+  pagination:
+    requestToken:
+      key: after
+      location: query
+    responseToken:
+      key: $.last_id
+      location: body

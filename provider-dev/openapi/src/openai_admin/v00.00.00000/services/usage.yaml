@@ -1888,5 +1888,166 @@ components:
               "project_id": "proj_abc",
               "quantity": 10000
           }
+  x-stackQL-resources:
+    audio_speeches:
+      id: openai_admin.usage.audio_speeches
+      name: audio_speeches
+      title: Audio Speeches
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1usage~1audio_speeches/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/audio_speeches/methods/list'
+        insert: []
+        update: []
+        delete: []
+        replace: []
+    audio_transcriptions:
+      id: openai_admin.usage.audio_transcriptions
+      name: audio_transcriptions
+      title: Audio Transcriptions
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1usage~1audio_transcriptions/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/audio_transcriptions/methods/list'
+        insert: []
+        update: []
+        delete: []
+        replace: []
+    code_interpreter_sessions:
+      id: openai_admin.usage.code_interpreter_sessions
+      name: code_interpreter_sessions
+      title: Code Interpreter Sessions
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1usage~1code_interpreter_sessions/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/code_interpreter_sessions/methods/list'
+        insert: []
+        update: []
+        delete: []
+        replace: []
+    completions:
+      id: openai_admin.usage.completions
+      name: completions
+      title: Completions
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1usage~1completions/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/completions/methods/list'
+        insert: []
+        update: []
+        delete: []
+        replace: []
+    embeddings:
+      id: openai_admin.usage.embeddings
+      name: embeddings
+      title: Embeddings
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1usage~1embeddings/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/embeddings/methods/list'
+        insert: []
+        update: []
+        delete: []
+        replace: []
+    images:
+      id: openai_admin.usage.images
+      name: images
+      title: Images
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1usage~1images/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/images/methods/list'
+        insert: []
+        update: []
+        delete: []
+        replace: []
+    moderations:
+      id: openai_admin.usage.moderations
+      name: moderations
+      title: Moderations
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1usage~1moderations/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/moderations/methods/list'
+        insert: []
+        update: []
+        delete: []
+        replace: []
+    vector_stores:
+      id: openai_admin.usage.vector_stores
+      name: vector_stores
+      title: Vector Stores
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1usage~1vector_stores/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/vector_stores/methods/list'
+        insert: []
+        update: []
+        delete: []
+        replace: []
 servers:
   - url: https://api.openai.com/v1
+x-stackQL-config:
+  pagination:
+    requestToken:
+      key: page
+      location: query
+    responseToken:
+      key: $.next_page
+      location: body

@@ -612,5 +612,33 @@ components:
               "project_id": "proj_abc",
               "quantity": 10000
           }
+  x-stackQL-resources:
+    costs:
+      id: openai_admin.costs.costs
+      name: costs
+      title: Costs
+      methods:
+        list:
+          operation:
+            $ref: '#/paths/~1organization~1costs/get'
+          response:
+            mediaType: application/json
+            openAPIDocKey: '200'
+            objectKey: $.data
+      sqlVerbs:
+        select:
+          - $ref: '#/components/x-stackQL-resources/costs/methods/list'
+        insert: []
+        update: []
+        delete: []
+        replace: []
 servers:
   - url: https://api.openai.com/v1
+x-stackQL-config:
+  pagination:
+    requestToken:
+      key: page
+      location: query
+    responseToken:
+      key: $.next_page
+      location: body

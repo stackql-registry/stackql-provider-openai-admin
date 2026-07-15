@@ -1,9 +1,21 @@
 #!/usr/bin/env node
 // Builds provider-dev/config/endpoint_inventory.csv over the filtered spec
 // (provider-dev/downloaded/openapi_cleaned.yaml): one row per operation with the
-// proposed service/resource/method/SQL-verb mapping, the pagination idiom
-// (bucketed / directory / single), group_by support, request-body and
-// update-semantics flags. Deterministic rules; validate-and-fail-without-writing.
+// proposed service/resource/method/SQL-verb mapping, the pagination idiom,
+// group_by support, request-body and update-semantics flags.
+// Deterministic rules; validate-and-fail-without-writing.
+//
+// The idiom is derived structurally from the 200 response envelope, never from a
+// hand list. Three exist on this surface (see NOTES.md section 4):
+//   bucketed        {object, data[bucket], has_more, next_page} + `page` request
+//                   param -> requestToken page, responseToken $.next_page
+//   cursor-derived  {object, data, first_id, last_id, has_more} + `after` request
+//                   param -> requestToken after, responseToken $.last_id (the
+//                   token is derived: no dedicated next-token field)
+//   cursor-next     {object, data, has_more, next} + `after` request param ->
+//                   requestToken after, responseToken $.next (an explicit cursor
+//                   that nulls out on the last page - the RBAC family)
+// post_process.mjs consumes this column to stamp the configs.
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -163,12 +175,15 @@ for (const [path, item] of Object.entries(doc.paths)) {
       if (keys.includes('next_page')) {
         envelope = 'bucketed-page';
         idiom = 'bucketed';
-      } else if (keys.includes('last_id') || keys.includes('has_more')) {
+      } else if (keys.includes('last_id')) {
         envelope = 'list-cursor';
-        idiom = 'directory';
+        idiom = 'cursor-derived';
+      } else if (keys.includes('next')) {
+        envelope = 'list-next';
+        idiom = 'cursor-next';
       } else {
         envelope = 'list-plain';
-        idiom = 'directory';
+        idiom = 'unpaginated';
       }
     } else if (schema) {
       envelope = 'object';
@@ -217,16 +232,24 @@ for (const [path, item] of Object.entries(doc.paths)) {
 for (const opId of Object.keys(OPS)) {
   if (!seenOpIds.has(opId)) errors.push(`rule for ${opId} matches no operation in the filtered spec`);
 }
-// idiom sanity: every list carries $.data; bucketed lists declare page (+ group_by on usage/costs);
-// directory lists declare limit
+// idiom sanity: every list carries $.data, and each idiom declares the request param
+// its config depends on. An unpaginated list would need a documented posture, so it
+// fails the run rather than silently shipping as first-page-only.
 for (const r of rows) {
-  if (r.method === 'list' && !r.object_key) errors.push(`${r.service}.${r.resource}.list (${r.operation_id}): no $.data object key`);
-  if (r.method === 'list' && r.idiom === 'bucketed' && !r.cursor_params.includes('page'))
+  if (r.method !== 'list') continue;
+  if (!r.object_key) errors.push(`${r.service}.${r.resource}.list (${r.operation_id}): no $.data object key`);
+  if (r.idiom === 'bucketed' && !r.cursor_params.includes('page'))
     errors.push(`${r.operation_id}: bucketed envelope without a page request param`);
+  if ((r.idiom === 'cursor-derived' || r.idiom === 'cursor-next') && !r.cursor_params.includes('after'))
+    errors.push(`${r.operation_id}: ${r.idiom} envelope without an after request param`);
+  if (r.idiom !== 'bucketed' && !r.cursor_params.includes('limit'))
+    errors.push(`${r.operation_id}: list without a limit param`);
+  if (r.idiom === 'unpaginated')
+    errors.push(`${r.operation_id}: list envelope carries no cursor field (next_page/last_id/next) - decide a posture, do not ship silently`);
+}
+for (const r of rows) {
   if (r.idiom === 'bucketed' && ['usage', 'costs'].includes(r.service) && !r.group_by)
     errors.push(`${r.operation_id}: usage/costs op without group_by`);
-  if (r.method === 'list' && r.idiom === 'directory' && !r.cursor_params.includes('limit'))
-    errors.push(`${r.operation_id}: directory envelope without a limit param`);
 }
 // update-POSTs must be partial by construction unless the note says otherwise
 for (const r of rows) {
