@@ -39,9 +39,9 @@ Two deterministic tag repairs before split: the 4 untagged `admin_api_keys` ops 
 
 The pinned spec's securitySchemes declare bearer auth; the vendor's admin endpoints document the admin key class (`sk-admin-...`), created by organization owners, disjoint from standard keys (`sk-...`). The provider config will be `auth: {type: bearer, credentialsenvvar: OPENAI_ADMIN_KEY}` (the sibling uses the same mechanism with `OPENAI_API_KEY`). The docs treatment follows openrouter: one env var, the key class explained plainly, the applicability note (organizations, not individual accounts) up front. The live accept/reject pair is runbook probe 1 - recorded as owed evidence, not assumed.
 
-## 4. Pagination: two idioms, two configs (task 4)
+## 4. Pagination: three idioms, three configs
 
-**Bucketed (usage and costs - 9 list operations).** Envelope from the pin: `{object: "page", data: [bucket], has_more, next_page}`, all four properties required at the top level; each bucket is `{object: "bucket", start_time, end_time, results: []}` (all required). Request params: `start_time` (required, epoch seconds), `end_time`, `bucket_width` (`1m|1h|1d`, default `1d`; costs allows only `1d`), scope filters (`project_ids`, `api_key_ids`, ..., plain non-bracketed arrays), `group_by`, `limit` (bucket count per page), `page` (the continuation token). The config is the anthropic_admin cursor shape exactly:
+**Bucketed (usage and costs - 9 list operations).** *(Configured correctly per the spec, but auto-pagination is broken against the live API by an upstream token-encoding bug - see section 12b; keep windows inside one page with `limit`.)* Envelope from the pin: `{object: "page", data: [bucket], has_more, next_page}`, all four properties required at the top level; each bucket is `{object: "bucket", start_time, end_time, results: []}` (all required). Request params: `start_time` (required, epoch seconds), `end_time`, `bucket_width` (`1m|1h|1d`, default `1d`; costs allows only `1d`), scope filters (`project_ids`, `api_key_ids`, ..., plain non-bracketed arrays), `group_by`, `limit` (bucket count per page), `page` (the continuation token). The config is the anthropic_admin cursor shape exactly:
 
 ```yaml
 x-stackQL-config:
@@ -171,7 +171,7 @@ SELECT
   'openai' AS vendor,
   json_extract(r.value, '$.project_id') AS project,
   json_extract(r.value, '$.model') AS model,
-  date(u.start_time, 'unixepoch') AS usage_date,
+  strftime('%Y-%m-%d', u.start_time, 'unixepoch') AS usage_date,
   json_extract(r.value, '$.input_tokens') AS input_tokens,
   json_extract(r.value, '$.output_tokens') AS output_tokens
 FROM openai_admin.usage.completions u, json_each(u.results) r
@@ -183,7 +183,7 @@ SELECT
   'anthropic' AS vendor,
   json_extract(r.value, '$.workspace_id') AS project,
   json_extract(r.value, '$.model') AS model,
-  date(u.starting_at) AS usage_date,
+  u.starting_at AS usage_date,
   json_extract(r.value, '$.input_tokens') AS input_tokens,
   json_extract(r.value, '$.output_tokens') AS output_tokens
 FROM anthropic_admin.usage.usage_reports u, json_each(u.results) r
@@ -216,15 +216,78 @@ ORDER BY usage_date, vendor, project, model;
 
 The openai_admin and anthropic_admin legs are concrete against generated resource names; the openrouter leg follows that build's phase 1 names; the google leg is the one placeholder, resolved when the Gemini billing surface is mapped. The acceptance run (all four legs live) is a docs-phase gate, blocked on the same keys as everything else here.
 
+## 12. Live findings from the first real run (2026-07-16)
+
+The first run against a real organization surfaced three things. Two are defects that were fixed; one is an upstream interop bug with a documented workaround.
+
+### 12a. SQL functions do not bind to request parameters - the docs were wrong
+
+Every usage/cost example shipped with `WHERE start_time = strftime('%s', date('now', '-30 days'))`. **This silently sends no `start_time` at all.** Verified with `--http.log.enabled`: the predicate emits `GET /organization/costs?` - the parameter is dropped, not evaluated, and the API then rejects the call for a missing required parameter. StackQL does not evaluate SQL functions when binding HTTP request parameters; only literals bind. (Functions in the SELECT list are fine - they run client-side over the result set, which is why `date(c.start_time, 'unixepoch')` as an output column works.)
+
+The examples were written but never run - the mistake the whole blocked-on-key posture was supposed to prevent, since a dummy key would have caught it in seconds. All examples now use literal epochs and say so. Nothing in the provider changes.
+
+### 12b. Bucketed auto-pagination is broken upstream: the page token's `=` padding
+
+A 30-day cost query paginates (see 12c) and the follow-up request fails:
+
+```
+GET /v1/organization/costs?group_by=project_id&start_time=1781481600
+  -> 200  next_page: "page_AAAAAGpY30vJnSVZAAAAAGo4ewA="
+GET /v1/organization/costs?group_by=project_id&page=page_AAAAAGpY30vJnSVZAAAAAGo4ewA%3D&start_time=1781481600
+  -> 400  "The page token is invalid, have you modified the query parameters?"
+```
+
+The error message misdirects: the query parameters are **not** modified - `group_by` and `start_time` are carried through byte-identically. The only difference between the token minted and the token returned is its base64 `=` padding, sent as **`%3D`**.
+
+Mechanism, traced through the source: any-sdk's `SetNextPage` clones the prior request, sets the token with `q.Set("page", token)`, then re-renders the query with `q.Encode()` (`internal/anysdk/http_armoury_params.go:114-122`). Go's `url.Values.Encode()` percent-escapes `=` in values to `%3D`. OpenAI's own SDK uses httpx, whose query quoter treats `=` as a safe character and sends it raw. Both are legal under RFC 3986 (`=` is permitted unescaped in a query value), but OpenAI's cursor parser evidently does not percent-decode the `page` value, so it receives a token that is not the one it issued.
+
+Ruled out first, so this is not a provider defect (all against a purpose-built mock, `tests/integration/mock_admin_server.mjs`):
+
+- **Config is correct** - the spec documents `page` as "a cursor... corresponding to the `next_page` field from the previous response", which is exactly the stamped `requestToken: page` / `responseToken: $.next_page`.
+- **Parameters are preserved** - request 2 carries every parameter from request 1 plus `page`.
+- **`page` is absent from request 1** - no empty-token first call.
+- **Encoding is otherwise faithful** - a token seeded with `+`, `/` and `=` round-trips exactly (`page_ab+cd/ef==xy` -> `page_ab%2Bcd%2Fef%3D%3Dxy` -> decodes back identically). The escaping is correct HTTP; the server just will not take it.
+
+**Workaround, applied everywhere: keep the window inside one page** by setting `limit` (see 12c), so the second request never happens. **Fix:** upstream in any-sdk - the token should be written into `RawQuery` without re-escaping, or `=` treated as safe in query values. Filed as follow-up; the directory idioms (`$.last_id`, `$.next`) are unaffected because their tokens are plain object ids with no padding.
+
+The smoke suite now asserts the defect explicitly (forcing `limit = 1`): it reports SKIP while the 400 reproduces, and **PASS with "the upstream token bug appears FIXED"** if it ever stops - so the workaround is removed on evidence rather than left in forever.
+
+### 12c. `limit` defaults to 7 buckets, so a week is the accidental page size
+
+`limit` bounds *buckets per page*, and the pin defaults it to **7** on both usage and costs - so any window over a week paginates and, until 11b is fixed, fails. Maximums: `costs` 180; `usage` 31 at `bucket_width=1d`, 168 at `1h`, 1440 at `1m`. Stackql does not inject query-parameter defaults (only header defaults - the anthropic finding), so the server's own default applies. Every example and every smoke query now sets `limit` to cover its window.
+
+### 12d. The live response carries `start_time_iso` / `end_time_iso`; the pinned spec does not
+
+The wire trace shows each bucket returning `start_time_iso: "2026-06-15T00:00:00+00:00"` and `end_time_iso` alongside the epoch fields. The pinned spec's `UsageTimeBucket` declares only `object`, `start_time`, `end_time`, `results`, so these are **not** projected as columns and `strftime` over the epoch (12e) remains the way to get a date. The spec is behind its own API. Recorded as an open item rather than patched: adding undeclared fields to the schema is a deliberate deviation from "the spec is canonical" and should be a decision, not a drive-by. If they were declared, the ISO fields would be the obvious thing for the docs to select.
+
+### 12e. `date()` / `datetime()` do not evaluate over a **column**; `strftime` does
+
+The examples also converted bucket epochs with `date(c.start_time, 'unixepoch')`. That column comes back **`0`**. The first read of this was "date/datetime are broken", which is wrong - the maintainer's counter-example (`SELECT datetime(1576417943, 'unixepoch') FROM google.storage.buckets ...`) works fine. The distinction is the **argument**, not the function:
+
+| expression | result |
+|---|---|
+| `datetime(1781481600, 'unixepoch')` - literal | `2026-06-15 00:00:00` |
+| `date(1781481600, 'unixepoch')` - literal | `2026-06-15` |
+| `datetime(start_time, 'unixepoch')` - column | `0` |
+| `datetime(c.start_time, 'unixepoch')` - aliased column | `0` |
+| `strftime('%Y-%m-%d', start_time, 'unixepoch')` - column | `2026-06-15` |
+| `strftime('%Y-%m-%d', c.start_time, 'unixepoch')` - aliased column | `2026-06-15` |
+
+So `date()` / `datetime()` evaluate constant-folded arguments but not column references, while `strftime()` handles columns correctly (aliased or not, and several in one projection). Their failure is also contagious within a projection: in a SELECT carrying both, a `strftime` column that returns `2026-06-15` on its own returned `null` sitting beside a `date()` call - so a single `date(column, ...)` can null out neighbouring expressions rather than just its own.
+
+**Rule for this provider's docs: `strftime('%Y-%m-%d', <epoch column>, 'unixepoch')`.** All examples updated. `json_each` and `json_extract` were never implicated - the full flagship query returns real dates, project ids and amounts once `date()` is gone. The engine-side cause (a stackql function-resolution issue over projected columns, not a provider one) is not diagnosed here.
+
 ## Open
 
-1. **The live smoke run - the one real gate left.** `tests/smoke_test.py` with `OPENAI_ADMIN_KEY` set (plus `OPENAI_API_KEY` for the rejection leg). Settles: admin accept / standard reject, cursor traversal for both entity idioms, bucket payload shape, zero-activity behaviour, and - with `--with-lifecycle` - the governance write path. Everything else in this document is proven. Nothing in the default run consumes tokens or spends money.
+1. **The live smoke run.** `tests/smoke_test.py` with `OPENAI_ADMIN_KEY` set (plus `OPENAI_API_KEY` for the rejection leg). Partially exercised as of 2026-07-16 (section 12 came out of it - reads, the bucketed shape and the pagination defect are now real evidence). Still unsettled: admin-accept / standard-reject through the provider, cursor traversal on the two entity idioms, and the `--with-lifecycle` write path.
+1a. **Upstream: the `%3D` page-token bug** (section 12b) - any-sdk re-escapes the base64 padding of a next-page token, which OpenAI's cursor parser rejects. Bucketed auto-pagination on usage/costs is unusable until this is fixed; `limit` covering the window is the workaround everywhere. The fix belongs in `SetNextPage` (write the token into `RawQuery` unescaped, or treat `=` as safe). File it, and drop the workaround when the smoke suite's explicit assertion flips to PASS.
 2. **The six `/projects/{project_id}` role/group paths** - outside the `/organization` subtree, but the same admin key class, and the sibling openai build's filter explicitly dispatches them here (its `filter_report.csv`, reason `org-admin-surface`). Kept, with their own keep code (`admin-key-class-outside-organization`) so a maintainer reversal is a one-line rule change. Excluding them would orphan the family - neither provider would carry it. Strike this item if the maintainer concurs; CLAUDE.md's scope sentence tightens to match either way.
-3. **Integration mock layer not built** (section 10) - the smoke suite plus the dummy-key routing captures cover most of its ground, but a mock would give CI a deterministic, credential-free gate on multi-page traversal for both cursor idioms, `$.data` unwrapping, the bearer header, and the `group_by` encoding. The clearest remaining gap in the test story.
+3. **Integration mock: started, not finished.** `tests/integration/mock_admin_server.mjs` exists (built to diagnose 11b) and serves all three idioms with request recording, a page-token contract, and bearer enforcement. What is missing is the harness around it: a runner that copies the provider to a temp dir, rewrites `servers:` to the mock, executes the assertions, and reports - the credential-free CI gate. The mock's own token contract is a *model* of the API's, and section 12b shows the real one differs (it accepts what the mock accepts, and the live API does not) - so the mock must not be treated as the source of truth on token validation.
 4. **CI not wired.** No workflow yet: the intended shape is fetch + `--check` drift + clean + inventory + split + mappings + normalize + generate + post-process + offline validation + meta-routes on every push, with the smoke suite secret-gated, and a spec-drift job on a schedule. The sibling's `build-and-test.yml` is the model.
 5. **Publish not done.** The provider is generated and validated locally but not pushed to `stackql-provider-registry`; `tests/smoke_test.py --registry public` is the post-publish verification and currently has nothing to pull. Netlify/Pages deployment for the microsite is likewise unwired (the sibling deploys via GitHub Actions; `website/static/CNAME` pins `openai-admin-provider.stackql.io`).
 6. **Update-POST field preservation** (section 7) - spec-side evidence says partial-by-construction; the keycloak-method wire probes (update one field, assert the others unchanged) on `projects.update` and `rate_limits.update` fold into the live run.
 7. **Convenience views for bucket fan-out** - one view per usage/costs resource projecting bucket time fields onto json_each'd result rows (the anthropic views mechanism, `generate --views-dir`). The base-table shape ships per section 5 regardless; the views are sugar that would make the flagship queries shorter.
 8. **`service_tier` group-by is completions-only** - the enum on the other usage resources omits it. Documented per resource from the inventory; no decision needed.
+8a. **`start_time_iso` / `end_time_iso` are on the wire but not in the spec** (section 12d) - the live buckets carry them; `UsageTimeBucket` does not declare them, so they are not columns. Options: leave it (spec is canonical; `strftime` over the epoch works - 12e), or add them in `pre_normalize.mjs` as an evidence-backed deviation with the wire capture as justification. Needs a decision, not a drive-by patch.
 9. **`analyze` appends to an existing `all_services.csv`** - keycloak carry-over, still true in provider-utils 0.7.6; delete before re-running `generate-mappings` (the README does). Candidate upstream fix.
 10. **Meta-routes default port collides.** The suite and `bin/start-server.sh` both default to 5444; a stackql server from a sibling repo (including one running under WSL) will answer instead, and the failure reads as "provider not found in registry" rather than a port clash. Pass `--port` / `--port` on both sides when working across repos.

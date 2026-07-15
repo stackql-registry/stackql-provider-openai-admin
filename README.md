@@ -215,18 +215,26 @@ The platform surface available to standard API keys (models, files, fine-tuning,
 
 ## Example Queries
 
-Token usage by project and model over the last 30 days:
+Usage and cost are bucketed time series: one row per time bucket, with the per-group breakdown in the `results` JSON column. Three constraints apply to every such query (all wire-verified - see NOTES.md section 11):
+
+- **`start_time` must be a literal** epoch-seconds value. StackQL does not evaluate SQL functions when binding request parameters, so `WHERE start_time = strftime('%s', date('now','-30 days'))` sends no `start_time` at all and the API rejects the call. Compute it outside the query (`date -d '30 days ago' +%s`).
+- **`limit` bounds buckets per page and defaults to 7**, so windows longer than a week paginate - and bucketed auto-pagination is currently broken upstream (NOTES.md section 11). Set `limit` to cover the window: max 180 on `costs`, 31 on `usage` at `bucket_width=1d`.
+- **`group_by` takes one dimension per query**; the result items carry every dimension, so group in SQL over a single-dimension fetch.
+- **Convert epochs with `strftime`, not `date()` / `datetime()`** - those fold constant arguments only, so `date(start_time, 'unixepoch')` over a column returns `0` (and can null out neighbouring columns), while `strftime('%Y-%m-%d', start_time, 'unixepoch')` is correct (NOTES.md section 12e).
+
+Token usage by project and model over a 30-day window:
 
 ```sql
 SELECT
   json_extract(r.value, '$.project_id')    AS project_id,
   json_extract(r.value, '$.model')         AS model,
-  date(u.start_time, 'unixepoch')          AS usage_date,
+  strftime('%Y-%m-%d', u.start_time, 'unixepoch') AS usage_date,
   json_extract(r.value, '$.input_tokens')  AS input_tokens,
   json_extract(r.value, '$.output_tokens') AS output_tokens
 FROM openai_admin.usage.completions u, json_each(u.results) r
-WHERE u.start_time = strftime('%s', date('now', '-30 days'))
+WHERE u.start_time = 1781481600
   AND u.bucket_width = '1d'
+  AND u.limit = 31
   AND u.group_by = 'project_id'
 ORDER BY usage_date, project_id;
 ```
@@ -235,15 +243,18 @@ Daily spend in USD by project:
 
 ```sql
 SELECT
-  date(c.start_time, 'unixepoch')         AS cost_date,
+  strftime('%Y-%m-%d', c.start_time, 'unixepoch') AS cost_date,
   json_extract(r.value, '$.project_id')   AS project_id,
   json_extract(r.value, '$.line_item')    AS line_item,
   json_extract(r.value, '$.amount.value') AS amount_usd
 FROM openai_admin.costs.costs c, json_each(c.results) r
-WHERE c.start_time = strftime('%s', date('now', '-30 days'))
+WHERE c.start_time = 1781481600
+  AND c.limit = 180
   AND c.group_by = 'project_id'
 ORDER BY cost_date, amount_usd DESC;
 ```
+
+A bucket with no activity returns `results: []`, so `json_each` yields nothing for it - an empty result set means no spend in the window, not a broken query. Drop the join (`SELECT start_time, results FROM ...`) to see the raw buckets.
 
 Projects and their service accounts:
 

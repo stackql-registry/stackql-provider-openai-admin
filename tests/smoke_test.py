@@ -243,17 +243,25 @@ def project_child_reads(sq, rep, key_present):
 def usage_and_cost(sq, rep, key_present, days):
     """The flagship: bucketed token usage and USD cost as rows, grouped.
 
-    A zero-activity org returns no buckets (or buckets with empty results) - a valid
+    `limit` must cover the whole window. It bounds buckets per page and defaults to
+    7, and bucketed auto-pagination is currently broken upstream: the base64 page
+    token's '=' padding is percent-escaped to %3D on the follow-up request and the
+    API rejects it (400 "The page token is invalid"). Staying inside one page avoids
+    the second request entirely. Maximums: usage 31 at bucket_width=1d, costs 180.
+
+    A zero-activity org returns buckets with empty results (or no buckets) - a valid
     result set, reported as PASS with the row count, never a failure.
     """
     if not key_present:
         rep.record("flagship: usage / cost buckets", "BLOCKED", "OPENAI_ADMIN_KEY not set")
         return
     start = int(time.time()) - days * 86400
+    usage_limit = min(max(days + 1, 1), 31)   # usage: max 31 buckets at 1d
+    cost_limit = min(max(days + 1, 1), 180)   # costs: max 180 buckets
 
     rows, err = q(sq, (
         "SELECT start_time, end_time, results FROM openai_admin.usage.completions "
-        f"WHERE start_time = {start} AND bucket_width = '1d'"
+        f"WHERE start_time = {start} AND bucket_width = '1d' AND \"limit\" = {usage_limit}"
     ))
     if err:
         rep.record("flagship: usage.completions buckets", "FAIL", err)
@@ -264,7 +272,8 @@ def usage_and_cost(sq, rep, key_present, days):
     # group_by on the wire - the parameter the FinOps queries depend on
     rows, err = q(sq, (
         "SELECT start_time, results FROM openai_admin.usage.completions "
-        f"WHERE start_time = {start} AND bucket_width = '1d' AND group_by = 'project_id'"
+        f"WHERE start_time = {start} AND bucket_width = '1d' AND \"limit\" = {usage_limit} "
+        "AND group_by = 'project_id'"
     ))
     if err:
         rep.record("flagship: usage grouped by project_id", "FAIL", err)
@@ -275,7 +284,7 @@ def usage_and_cost(sq, rep, key_present, days):
 
     rows, err = q(sq, (
         "SELECT start_time, results FROM openai_admin.costs.costs "
-        f"WHERE start_time = {start} AND group_by = 'project_id'"
+        f"WHERE start_time = {start} AND \"limit\" = {cost_limit} AND group_by = 'project_id'"
     ))
     if err:
         rep.record("flagship: costs.costs daily USD buckets", "FAIL", err)
@@ -288,13 +297,31 @@ def usage_and_cost(sq, rep, key_present, days):
             "vector_stores", "code_interpreter_sessions"]
     failed = []
     for cap in caps:
-        _, cerr = q(sq, f"SELECT start_time FROM openai_admin.usage.{cap} WHERE start_time = {start} AND bucket_width = '1d'")
+        _, cerr = q(sq, (
+            f"SELECT start_time FROM openai_admin.usage.{cap} "
+            f"WHERE start_time = {start} AND bucket_width = '1d' AND \"limit\" = {usage_limit}"
+        ))
         if cerr and not looks_absent(cerr):
             failed.append(f"{cap}: {cerr}")
     if failed:
         rep.record("flagship: all usage capabilities answer", "FAIL", "; ".join(failed[:2]))
     else:
         rep.record("flagship: all usage capabilities answer", "PASS", f"{len(caps) + 1} capabilities incl. completions")
+
+    # The known-broken path, asserted explicitly so a fix upstream is noticed rather
+    # than assumed: force a second page and expect the token rejection.
+    _, err = q(sq, (
+        "SELECT start_time FROM openai_admin.costs.costs "
+        f"WHERE start_time = {start} AND \"limit\" = 1"
+    ))
+    if err and "page token" in str(err).lower():
+        rep.record("flagship: bucketed pagination (known upstream defect)", "SKIP",
+                   "400 page-token rejection reproduced - the %3D encoding bug; keep limit >= window")
+    elif err:
+        rep.record("flagship: bucketed pagination (known upstream defect)", "SKIP", f"errored differently: {err}")
+    else:
+        rep.record("flagship: bucketed pagination (known upstream defect)", "PASS",
+                   "multi-page traversal now works - the upstream token bug appears FIXED, drop the limit workaround")
 
 
 def pagination_smokes(sq, rep, key_present):

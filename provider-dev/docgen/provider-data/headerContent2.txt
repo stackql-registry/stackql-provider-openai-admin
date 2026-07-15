@@ -45,20 +45,28 @@ stackql.exe shell --auth=$Auth
 
 ## Token spend and cost as rows
 
-Usage and cost are bucketed time series. Each row is one time bucket (`start_time`, `end_time`) and its `results` array holds the per-group breakdown, fanned out with `json_each` and read with `json_extract`. `start_time` is required and is Unix epoch seconds; `bucket_width` defaults to `1d`; `group_by` selects the breakdown dimension.
+Usage and cost are bucketed time series. Each row is one time bucket (`start_time`, `end_time`) and its `results` array holds the per-group breakdown, fanned out with `json_each` and read with `json_extract`.
 
-Token usage by project and model over the last 30 days:
+Three things to know before writing one of these queries:
+
+- **`start_time` is required, and must be a literal** Unix epoch seconds value. StackQL does not evaluate SQL functions when binding request parameters: a predicate like `WHERE start_time = strftime('%s', date('now','-30 days'))` silently sends **no** `start_time` at all and the API rejects the call. Compute the epoch outside the query (`date -d '30 days ago' +%s`, or `(Get-Date).AddDays(-30) | Get-Date -UFormat %s`) and paste the literal.
+- **Set `limit` to cover your whole window.** It bounds the number of *buckets per page*, and it defaults to **7** - so any window longer than a week paginates. Maximums: `costs` 180; `usage` 31 at `bucket_width=1d`, 168 at `1h`, 1440 at `1m`. Keeping the window inside one page is also the current workaround for a pagination defect - see the note below.
+- **`group_by` takes one dimension per query.** The result items carry every dimension as a field regardless (`project_id`, `api_key_id`, `model`, `user_id`, `batch`), so multi-dimension questions are answered by grouping in SQL over a single-dimension fetch.
+- **Convert bucket epochs with `strftime`, not `date()` / `datetime()`.** `strftime('%Y-%m-%d', start_time, 'unixepoch')` evaluates correctly over a column; `date(start_time, 'unixepoch')` returns `0` (those two only fold constant arguments, so `date(1781481600, 'unixepoch')` works but a column reference does not) and can null out neighbouring columns in the same `SELECT`.
+
+Token usage by project and model over a 30-day window (`1781481600` = 2026-06-15):
 
 ```sql
 SELECT
   json_extract(r.value, '$.project_id')    AS project_id,
   json_extract(r.value, '$.model')         AS model,
-  date(u.start_time, 'unixepoch')          AS usage_date,
+  strftime('%Y-%m-%d', u.start_time, 'unixepoch') AS usage_date,
   json_extract(r.value, '$.input_tokens')  AS input_tokens,
   json_extract(r.value, '$.output_tokens') AS output_tokens
 FROM openai_admin.usage.completions u, json_each(u.results) r
-WHERE u.start_time = strftime('%s', date('now', '-30 days'))
+WHERE u.start_time = 1781481600
   AND u.bucket_width = '1d'
+  AND u.limit = 31
   AND u.group_by = 'project_id'
 ORDER BY usage_date, project_id;
 ```
@@ -67,17 +75,28 @@ Daily spend in USD by project:
 
 ```sql
 SELECT
-  date(c.start_time, 'unixepoch')                AS cost_date,
+  strftime('%Y-%m-%d', c.start_time, 'unixepoch') AS cost_date,
   json_extract(r.value, '$.project_id')          AS project_id,
   json_extract(r.value, '$.line_item')           AS line_item,
   json_extract(r.value, '$.amount.value')        AS amount_usd
 FROM openai_admin.costs.costs c, json_each(c.results) r
-WHERE c.start_time = strftime('%s', date('now', '-30 days'))
+WHERE c.start_time = 1781481600
+  AND c.limit = 180
   AND c.group_by = 'project_id'
 ORDER BY cost_date, amount_usd DESC;
 ```
 
-`group_by` takes one dimension per query. The result items carry every dimension as a field regardless (`project_id`, `api_key_id`, `model`, `user_id`, `batch`), so multi-dimension questions are answered by grouping in SQL over a single-dimension fetch.
+A bucket with no activity comes back with `results: []`, so `json_each` yields no rows for it - an empty result set means no spend in that window, not a failed query. Use `SELECT start_time, results FROM ...` without the join to see the raw buckets.
+
+:::warning Pagination on usage and costs
+
+Auto-pagination is currently broken against the live usage and cost endpoints, and a query whose window needs a second page fails with `400 The page token is invalid, have you modified the query parameters?` and returns nothing.
+
+The cause is an encoding interop defect, not a mis-configured provider. OpenAI's `next_page` token is base64 and ends in `=` padding. The engine re-sends it through Go's query encoder, which percent-escapes the padding to `%3D`; OpenAI's own client leaves `=` raw, and its cursor parser does not accept the escaped form - so the token it receives is not the one it minted. Both encodings are legal per RFC 3986.
+
+Until it is fixed upstream, set `limit` so the whole window fits in one page (the examples above do). The directory resources - projects, users, roles, audit logs and the rest - are unaffected and paginate normally.
+
+:::
 
 ## Governance and audit
 
