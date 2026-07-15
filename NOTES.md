@@ -41,7 +41,7 @@ The pinned spec's securitySchemes declare bearer auth; the vendor's admin endpoi
 
 ## 4. Pagination: three idioms, three configs
 
-**Bucketed (usage and costs - 9 list operations).** *(Configured per the spec; multi-page traversal additionally depends on WO-001 - see section 12b. Sizing `limit` to the window keeps a report in one request.)* Envelope from the pin: `{object: "page", data: [bucket], has_more, next_page}`, all four properties required at the top level; each bucket is `{object: "bucket", start_time, end_time, results: []}` (all required). Request params: `start_time` (required, epoch seconds), `end_time`, `bucket_width` (`1m|1h|1d`, default `1d`; costs allows only `1d`), scope filters (`project_ids`, `api_key_ids`, ..., plain non-bracketed arrays), `group_by`, `limit` (bucket count per page), `page` (the continuation token). The config is the anthropic_admin cursor shape exactly:
+**Bucketed (usage and costs - 9 list operations).** *(Configured per the spec; see section 12b on multi-page traversal. Sizing `limit` to the window keeps a report in one request.)* Envelope from the pin: `{object: "page", data: [bucket], has_more, next_page}`, all four properties required at the top level; each bucket is `{object: "bucket", start_time, end_time, results: []}` (all required). Request params: `start_time` (required, epoch seconds), `end_time`, `bucket_width` (`1m|1h|1d`, default `1d`; costs allows only `1d`), scope filters (`project_ids`, `api_key_ids`, ..., plain non-bracketed arrays), `group_by`, `limit` (bucket count per page), `page` (the continuation token). The config is the anthropic_admin cursor shape exactly:
 
 ```yaml
 x-stackQL-config:
@@ -248,7 +248,16 @@ Ruled out first, so this is not a provider defect (all against a purpose-built m
 - **`page` is absent from request 1** - no empty-token first call.
 - **Encoding is otherwise faithful** - a token seeded with `+`, `/` and `=` round-trips exactly (`page_ab+cd/ef==xy` -> `page_ab%2Bcd%2Fef%3D%3Dxy` -> decodes back identically). The escaping is correct HTTP; the server just will not take it.
 
-**Work order: `work-orders/WO-001-any-sdk-pagination-token-encoding.md`** (a config switch to send the request token unescaped). **Applied meanwhile: keep the window inside one page** by setting `limit` (see 12c), so the second request never happens. The fix is upstream in any-sdk per WO-001; the directory idioms (`$.last_id`, `$.next`) are unaffected because their tokens are plain object ids with no padding.
+**It fails intermittently, and that is the trap.** The first live smoke run (2026-07-16) reported multi-page bucket traversal **passing** at `limit = 1`, which read as "the upstream bug is fixed". Nothing had changed. Base64 only carries `=` padding when the payload length is not a multiple of 3, so the escaping only bites when the token happens to end in padding:
+
+| token payload | encodes to | outcome |
+|---|---|---|
+| 18 or 21 bytes (len % 3 == 0) | no `=` | traverses fine |
+| 19, 20, 22, 23 bytes | one or two `=` | escaped to `%3D` -> 400 |
+
+The failing 30-day cost token (`page_AAAAAGpY30vJnSVZAAAAAGo4ewA=`) decodes to exactly 20 bytes -> one pad -> rejected. So roughly one traversal in three succeeds and the rest fail, from the same code path on the same config. This is worse than a consistent break: it passes a smoke test on a lucky token and fails in production on the next query, and any single green run is not evidence of a fix. The smoke suite therefore no longer draws a conclusion from one sample - it reports what the traversal did and nothing more.
+
+**Raised upstream against any-sdk** (a pagination config switch to send the request token unescaped). **Applied meanwhile: keep the window inside one page** by setting `limit` (see 12c), so the second request never happens. The fix belongs in `SetNextPage`; the directory idioms (`$.last_id`, `$.next`) are unaffected because their tokens are plain object ids with no padding.
 
 The smoke suite now asserts the defect explicitly (forcing `limit = 1`): it reports SKIP while the 400 reproduces, and **PASS with "the upstream token bug appears FIXED"** if it ever stops - so the workaround is removed on evidence rather than left in forever.
 
@@ -259,6 +268,14 @@ The smoke suite now asserts the defect explicitly (forcing `limit = 1`): it repo
 ### 12d. The live response carries `start_time_iso` / `end_time_iso`; the pinned spec does not
 
 The wire trace shows each bucket returning `start_time_iso: "2026-06-15T00:00:00+00:00"` and `end_time_iso` alongside the epoch fields. The pinned spec's `UsageTimeBucket` declares only `object`, `start_time`, `end_time`, `results`, so these are **not** projected as columns and `strftime` over the epoch (12e) remains the way to get a date. The spec is behind its own API. Recorded as an open item rather than patched: adding undeclared fields to the schema is a deliberate deviation from "the spec is canonical" and should be a decision, not a drive-by. If they were declared, the ISO fields would be the obvious thing for the docs to select.
+
+### 12f. Project creation is not read-after-write consistent
+
+The first `--with-lifecycle` run created `stackql-smoke-<stamp>` successfully and then failed to find it in the very next `SELECT` over `projects.projects`. The project did exist - it simply was not listable yet. Newly created projects (and their service accounts) appear in list responses lazily.
+
+Every read-back of a write in the smoke suite now polls with a bound (`poll_until`, `--timeout` default 60s, `--poll-interval` default 3s) instead of assuming read-after-write: finding the created project, listing the new service account, and confirming the archived status. On timeout the report carries diagnostics (elapsed, how many projects were listed, a sample of names) rather than a bare "not found". This is the same create-then-poll pattern the sibling `openai` build uses for vector store readiness.
+
+Worth noting for the docs if it ever comes up in user-facing terms: a `SELECT` immediately after an `INSERT` on this surface may not see the new row. Nothing to fix in the provider - `INSERT` returns no projectable body here, so the id is only obtainable by a follow-up read.
 
 ### 12e. `date()` / `datetime()` do not evaluate over a **column**; `strftime` does
 
@@ -275,15 +292,14 @@ The examples also converted bucket epochs with `date(c.start_time, 'unixepoch')`
 
 So `date()` / `datetime()` evaluate constant-folded arguments but not column references, while `strftime()` handles columns correctly (aliased or not, and several in one projection). Their failure is also contagious within a projection: in a SELECT carrying both, a `strftime` column that returns `2026-06-15` on its own returned `null` sitting beside a `date()` call - so a single `date(column, ...)` can null out neighbouring expressions rather than just its own.
 
-**Work order: `work-orders/WO-002-stackql-datetime-column-arg.md`** (a bare `ColName` in argument 1 of `date`/`datetime`/`typeof` is not resolved; `abs`, `upper`, `length`, `max`, `coalesce` and `json_extract` all handle one correctly, and `datetime(start_time + 0, 'unixepoch')` works - so it is neither the modifier nor argument position in general). The functions are stock SQLite builtins via the vendored `stackql-go-sqlite3` driver, so what reaches SQLite is the suspect, not the implementation.
+**Raised upstream against stackql** (a bare `ColName` in argument 1 of `date`/`datetime`/`typeof` is not resolved; `abs`, `upper`, `length`, `max`, `coalesce` and `json_extract` all handle one correctly, and `datetime(start_time + 0, 'unixepoch')` works - so it is neither the modifier nor argument position in general). The functions are stock SQLite builtins via the vendored `stackql-go-sqlite3` driver, so what reaches SQLite is the suspect, not the implementation.
 
 **Rule for this provider's docs: `strftime('%Y-%m-%d', <epoch column>, 'unixepoch')`.** All examples updated. `json_each` and `json_extract` were never implicated - the full flagship query returns real dates, project ids and amounts once `date()` is gone. The engine-side cause (a stackql function-resolution issue over projected columns, not a provider one) is not diagnosed here.
 
 ## Open
 
 1. **The live smoke run.** `tests/smoke_test.py` with `OPENAI_ADMIN_KEY` set (plus `OPENAI_API_KEY` for the rejection leg). Partially exercised as of 2026-07-16 (section 12 came out of it - reads, the bucketed shape and the pagination defect are now real evidence). Still unsettled: admin-accept / standard-reject through the provider, cursor traversal on the two entity idioms, and the `--with-lifecycle` write path.
-1a. **WO-001 - any-sdk pagination token encoding** (`work-orders/WO-001-...md`, section 12b). Written up with evidence and an implementation sketch; needs filing on `stackql/any-sdk` (no `gh` CLI on the build machine). Sizing `limit` to the window is the standing convention until it lands; the smoke suite's WO-001 tracker flips to PASS when it does.
-1b. **WO-002 - stackql `date`/`datetime`/`typeof` over a bare column** (`work-orders/WO-002-...md`, section 12e). Same: written up, needs filing on `stackql/stackql`. `strftime` is correct today and stays correct after a fix, so no provider change is pending on it.
+1a. **Two upstream engine items are written up with evidence and need filing** - the any-sdk pagination token encoding (section 12b) and stackql's `date`/`datetime`/`typeof` over a bare column (section 12e). Both drafts live outside this repo; the evidence and reproduction for each is recorded here. Neither needs a provider change to land: sizing `limit` to the window and using `strftime` are correct today and stay correct afterwards.
 2. **The six `/projects/{project_id}` role/group paths** - outside the `/organization` subtree, but the same admin key class, and the sibling openai build's filter explicitly dispatches them here (its `filter_report.csv`, reason `org-admin-surface`). Kept, with their own keep code (`admin-key-class-outside-organization`) so a maintainer reversal is a one-line rule change. Excluding them would orphan the family - neither provider would carry it. Strike this item if the maintainer concurs; CLAUDE.md's scope sentence tightens to match either way.
 3. **Integration mock: started, not finished.** `tests/integration/mock_admin_server.mjs` exists (built to diagnose 11b) and serves all three idioms with request recording, a page-token contract, and bearer enforcement. What is missing is the harness around it: a runner that copies the provider to a temp dir, rewrites `servers:` to the mock, executes the assertions, and reports - the credential-free CI gate. The mock's own token contract is a *model* of the API's, and section 12b shows the real one differs (it accepts what the mock accepts, and the live API does not) - so the mock must not be treated as the source of truth on token validation.
 4. **CI not wired.** No workflow yet: the intended shape is fetch + `--check` drift + clean + inventory + split + mappings + normalize + generate + post-process + offline validation + meta-routes on every push, with the smoke suite secret-gated, and a spec-drift job on a schedule. The sibling's `build-and-test.yml` is the model.

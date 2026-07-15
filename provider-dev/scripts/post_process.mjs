@@ -1,5 +1,16 @@
 #!/usr/bin/env node
-// Stage 4 tail: stamp the pagination configuration onto the generated provider.
+// Stage 4 tail: stamp the pagination configuration and the EXEC dispatch workaround
+// onto the generated provider.
+//
+// EXEC workaround (the anthropic finding, reused not re-derived). stackql v0.10.542
+// SIGSEGVs while preparing an EXEC whose resolved response schema carries no
+// array-typed property: drm.GenerateSelectDML -> wrappedSchema.GetType on a nil
+// inner schema. `archive-project` returns a bare `Project` object, so every
+// `projects.archive` call panicked - dispatching nothing while the SQL layer
+// reported no error. Stamping `response.schema_override` to a synthetic envelope
+// that does carry an array property fixes dispatch. Applied only to exec-only
+// methods (never referenced from sqlVerbs) whose response schema lacks an array
+// property; methods that already have one are left alone.
 //
 // Why this is a script rather than a `--service-config` flag. The generator's
 // --service-config applies ONE config to every service, but this surface carries
@@ -98,9 +109,34 @@ for (const [service, lists] of listsByService) {
   dominant.set(service, winner);
 }
 
+// Synthetic dispatch-result envelope for EXEC-only methods (see the header note).
+// It must carry an array-typed property - that is the shape whose absence panics.
+const EXEC_ENVELOPE_NAME = 'StackqlExecResult';
+const EXEC_ENVELOPE = {
+  type: 'object',
+  description: 'Synthetic dispatch-result envelope for EXEC-only methods (see post_process.mjs).',
+  properties: {
+    result: { type: 'string', description: 'Raw response payload.' },
+    items: { type: 'array', items: { type: 'string' } },
+  },
+};
+
+const resolveOpRef = (spec, opRef) => {
+  const parts = opRef.replace(/^#\/paths\//, '').split('/');
+  const httpVerb = parts.pop();
+  const pathKey = parts.join('/').replace(/~1/g, '/').replace(/~0/g, '~');
+  return ((spec.paths || {})[pathKey] || {})[httpVerb];
+};
+
+const schemaOf = (spec, maybeRef) => {
+  if (!maybeRef) return null;
+  if (maybeRef.$ref) return (spec.components?.schemas || {})[maybeRef.$ref.split('/').pop()] || null;
+  return maybeRef;
+};
+
 const errors = [];
 const docs = {};
-const stamps = { service: [], method: [] };
+const stamps = { service: [], method: [], exec: [] };
 
 const files = fs.readdirSync(servicesDir).filter((f) => f.endsWith('.yaml')).sort();
 for (const filename of files) {
@@ -120,6 +156,33 @@ for (const filename of files) {
 
   const resources = doc.components?.['x-stackQL-resources'] || {};
   for (const [resourceName, resource] of Object.entries(resources)) {
+    // EXEC dispatch workaround: exec-only methods are those no sqlVerb routes to.
+    const sqlVerbMethods = new Set(
+      Object.values(resource.sqlVerbs || {}).flat().map((x) => x.$ref.split('/').pop())
+    );
+    for (const [methodName, method] of Object.entries(resource.methods || {})) {
+      if (sqlVerbMethods.has(methodName)) continue;
+      const execOp = resolveOpRef(doc, method.operation.$ref);
+      if (!execOp) {
+        errors.push(`${service}.${resourceName}.${methodName}: dangling operation ref ${method.operation.$ref}`);
+        continue;
+      }
+      const content = execOp.responses?.[method.response?.openAPIDocKey || '200']?.content || {};
+      const ct = method.response?.mediaType && content[method.response.mediaType]
+        ? method.response.mediaType
+        : Object.keys(content)[0];
+      const schema = schemaOf(doc, content[ct]?.schema);
+      if (!schema) continue;
+      const hasArrayProp = Object.values(schema.properties || {}).some(
+        (prop) => prop && (prop.type === 'array' || (prop.$ref && schemaOf(doc, prop)?.type === 'array'))
+      );
+      if (hasArrayProp) continue;
+      doc.components.schemas = doc.components.schemas || {};
+      doc.components.schemas[EXEC_ENVELOPE_NAME] = structuredClone(EXEC_ENVELOPE);
+      method.response = { ...(method.response || {}), schema_override: { $ref: `#/components/schemas/${EXEC_ENVELOPE_NAME}` } };
+      stamps.exec.push(`${service}.${resourceName}.${methodName}`);
+    }
+
     for (const [methodName, method] of Object.entries(resource.methods || {})) {
       const key = `${service}.${resourceName}.${methodName}`;
       const want = expectedIdiom.get(key);
@@ -179,4 +242,6 @@ console.log(`Stamped service-level pagination on ${stamps.service.length} servic
 for (const s of stamps.service) console.log(`  ${s}`);
 console.log(`Stamped method-level overrides on ${stamps.method.length} deviating list method(s):`);
 for (const m of stamps.method) console.log(`  ${m}`);
+console.log(`Stamped the EXEC dispatch envelope on ${stamps.exec.length} exec-only method(s) whose response carries no array property:`);
+for (const e of stamps.exec) console.log(`  ${e}`);
 console.log(`Validated ${expectedIdiom.size} list method(s) resolve to their inventory idiom through the operation -> service chain.`);

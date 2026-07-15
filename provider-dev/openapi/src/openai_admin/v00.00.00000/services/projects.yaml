@@ -4359,6 +4359,17 @@ components:
               "role": "owner",
               "added_at": 1711471533
           }
+    StackqlExecResult:
+      type: object
+      description: Synthetic dispatch-result envelope for EXEC-only methods (see post_process.mjs).
+      properties:
+        result:
+          type: string
+          description: Raw response payload.
+        items:
+          type: array
+          items:
+            type: string
   x-stackQL-resources:
     projects:
       id: openai_admin.projects.projects
@@ -4402,6 +4413,8 @@ components:
           response:
             mediaType: application/json
             openAPIDocKey: '200'
+            schema_override:
+              $ref: '#/components/schemas/StackqlExecResult'
       sqlVerbs:
         select:
           - $ref: '#/components/x-stackQL-resources/projects/methods/get'

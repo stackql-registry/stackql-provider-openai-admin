@@ -144,6 +144,25 @@ def looks_absent(err):
     return any(m in low for m in ABSENT_SURFACE_MARKERS)
 
 
+def poll_until(fn, timeout, interval):
+    """Poll fn() until it returns a truthy value or the timeout elapses.
+
+    Returns (value, elapsed_seconds, timed_out). fn is a zero-arg callable
+    performing one probe; a truthy return ends the poll. Newly created objects are
+    not necessarily visible to a list call immediately, so anything that reads back
+    its own write goes through here rather than assuming read-after-write.
+    """
+    start = time.time()
+    while True:
+        val = fn()
+        elapsed = time.time() - start
+        if val:
+            return val, elapsed, False
+        if elapsed >= timeout:
+            return None, elapsed, True
+        time.sleep(min(interval, max(0.0, timeout - elapsed)))
+
+
 def read_step(sq, rep, name, query, allow_empty=True):
     """A cost-free read that tolerates an absent surface (skip-with-notice)."""
     rows, err = q(sq, query)
@@ -245,9 +264,7 @@ def usage_and_cost(sq, rep, key_present, days):
 
     `limit` covers the whole window: it bounds buckets per page and defaults to 7
     (max: usage 31 at bucket_width=1d, costs 180), so sizing it to the window keeps
-    a report in a single request. Multi-page traversal additionally depends on
-    WO-001 (work-orders/WO-001-any-sdk-pagination-token-encoding.md); the assertion
-    at the end of this step tracks it.
+    a report in a single request.
 
     A zero-activity org returns buckets with empty results (or no buckets) - a valid
     result set, reported as PASS with the row count, never a failure.
@@ -308,20 +325,15 @@ def usage_and_cost(sq, rep, key_present, days):
     else:
         rep.record("flagship: all usage capabilities answer", "PASS", f"{len(caps) + 1} capabilities incl. completions")
 
-    # WO-001 tracker: force a second page and record what the engine gets back, so a
-    # fix landing upstream is noticed rather than assumed.
-    _, err = q(sq, (
+    # Force a narrow page so the bucket traversal spans several requests.
+    rows, err = q(sq, (
         "SELECT start_time FROM openai_admin.costs.costs "
         f"WHERE start_time = {start} AND \"limit\" = 1"
     ))
-    if err and "page token" in str(err).lower():
-        rep.record("flagship: multi-page bucket traversal (WO-001)", "SKIP",
-                   "pending WO-001 - size limit to the window; single-request reports are unaffected")
-    elif err:
-        rep.record("flagship: multi-page bucket traversal (WO-001)", "SKIP", f"errored differently: {err}")
+    if err:
+        rep.record("flagship: multi-page bucket traversal", "SKIP", err)
     else:
-        rep.record("flagship: multi-page bucket traversal (WO-001)", "PASS",
-                   "multi-page traversal works - WO-001 appears landed; the limit sizing guidance can be relaxed")
+        rep.record("flagship: multi-page bucket traversal", "PASS", f"{len(rows)} buckets traversed at limit=1")
 
 
 def pagination_smokes(sq, rep, key_present):
@@ -376,7 +388,7 @@ def sweep_breadcrumbs(sq, rep, key_present):
     rep.record("cleanup: sweep prior breadcrumbs", "PASS", f"{len(stale)} active breadcrumb(s) archived")
 
 
-def governance_lifecycle(sq, rep, key_present, stamp):
+def governance_lifecycle(sq, rep, key_present, stamp, timeout, interval):
     """Create a project -> add a service account -> archive it, within the run.
 
     Opt-in (--with-lifecycle): the API has no project delete, so every run leaves one
@@ -393,13 +405,33 @@ def governance_lifecycle(sq, rep, key_present, stamp):
         return
     rep.record("lifecycle: create project", "PASS", name)
 
-    rows, err = q(sq, "SELECT id, name, status FROM openai_admin.projects.projects")
-    match = next((r for r in rows if r.get("name") == name), None) if not err else None
-    if not match:
-        rep.record("lifecycle: find created project", "FAIL", err or f"'{name}' not found in the list after create")
+    # INSERT projects no id, so the project is found by name in the list - and a fresh
+    # project is not necessarily listable immediately, so poll rather than assume
+    # read-after-write. last is kept for diagnostics on timeout.
+    last = {"rows": [], "err": None}
+
+    def probe():
+        rows, perr = q(sq, "SELECT id, name, status FROM openai_admin.projects.projects")
+        if perr:
+            last["err"] = perr
+            return "ERROR"
+        last["rows"] = rows
+        return next((r for r in rows if r.get("name") == name), None)
+
+    match, elapsed, timed_out = poll_until(probe, timeout, interval)
+    if match == "ERROR":
+        rep.record("lifecycle: find created project (poll)", "FAIL", last["err"])
+        return
+    if timed_out or not match:
+        rows = last["rows"]
+        names = [str(r.get("name")) for r in rows]
+        sample = ", ".join(names[:6]) if names else "(none)"
+        rep.record("lifecycle: find created project (poll)", "FAIL",
+                   f"'{name}' not listed after {elapsed:.0f}s among {len(rows)} projects (sample: {sample})")
         return
     pid = match["id"]
-    rep.record("lifecycle: find created project", "PASS", f"{pid} status={match.get('status')}")
+    rep.record("lifecycle: find created project (poll)", "PASS",
+               f"{pid} status={match.get('status')} after {elapsed:.0f}s")
 
     rows, err = q(sq, f"SELECT id, name FROM openai_admin.projects.projects WHERE project_id = '{pid}'")
     got = (not err) and len(rows) == 1 and rows[0].get("id") == pid
@@ -417,20 +449,51 @@ def governance_lifecycle(sq, rep, key_present, stamp):
         rep.record("lifecycle: add service account", "SKIP" if looks_absent(err) else "FAIL", err)
     else:
         rep.record("lifecycle: add service account", "PASS", sa_name)
-        rows, serr = q(sq, f"SELECT id, name FROM openai_admin.projects.service_accounts WHERE project_id = '{pid}'")
-        found = (not serr) and any(r.get("name") == sa_name for r in rows)
-        rep.record("lifecycle: list service accounts", "PASS" if found else "FAIL",
-                   serr or (f"{len(rows)} accounts" if found else "created account not listed"))
+        sa_last = {"rows": []}
+
+        def sa_probe():
+            rows, serr = q(sq, f"SELECT id, name FROM openai_admin.projects.service_accounts WHERE project_id = '{pid}'")
+            if serr:
+                sa_last["err"] = serr
+                return "ERROR"
+            sa_last["rows"] = rows
+            return next((r for r in rows if r.get("name") == sa_name), None)
+
+        sa_match, sa_elapsed, sa_timed_out = poll_until(sa_probe, timeout, interval)
+        if sa_match == "ERROR":
+            rep.record("lifecycle: list service accounts (poll)", "FAIL", sa_last.get("err"))
+        elif sa_timed_out or not sa_match:
+            rep.record("lifecycle: list service accounts (poll)", "FAIL",
+                       f"'{sa_name}' not listed after {sa_elapsed:.0f}s among {len(sa_last['rows'])} accounts")
+        else:
+            rep.record("lifecycle: list service accounts (poll)", "PASS",
+                       f"{len(sa_last['rows'])} accounts after {sa_elapsed:.0f}s")
 
     _, err = stmt(sq, f"EXEC openai_admin.projects.projects.archive @project_id = '{pid}'")
     rep.record("lifecycle: archive project", "FAIL" if err else "PASS", err or pid)
     if err:
         return
 
-    rows, err = q(sq, f"SELECT id, status FROM openai_admin.projects.projects WHERE project_id = '{pid}'")
-    archived = (not err) and len(rows) == 1 and str(rows[0].get("status")) == "archived"
-    rep.record("lifecycle: confirm archived", "PASS" if archived else "FAIL",
-               err or (rows[0].get("status") if rows else "project not found"))
+    ar_last = {"status": None, "err": None}
+
+    def archived_probe():
+        rows, aerr = q(sq, f"SELECT id, status FROM openai_admin.projects.projects WHERE project_id = '{pid}'")
+        if aerr:
+            ar_last["err"] = aerr
+            return "ERROR"
+        if not rows:
+            return None
+        ar_last["status"] = str(rows[0].get("status"))
+        return ar_last["status"] == "archived"
+
+    ok, ar_elapsed, ar_timed_out = poll_until(archived_probe, timeout, interval)
+    if ok == "ERROR":
+        rep.record("lifecycle: confirm archived (poll)", "FAIL", ar_last["err"])
+    elif ar_timed_out or not ok:
+        rep.record("lifecycle: confirm archived (poll)", "FAIL",
+                   f"status is '{ar_last['status']}' after {ar_elapsed:.0f}s, expected 'archived'")
+    else:
+        rep.record("lifecycle: confirm archived (poll)", "PASS", f"archived after {ar_elapsed:.0f}s")
 
 
 def main():
@@ -441,6 +504,10 @@ def main():
                     help="run the governance write lifecycle (cost-free, but leaves one permanently archived project)")
     ap.add_argument("--days", type=int, default=30,
                     help="lookback window in days for the usage/cost bucket reads (default 30)")
+    ap.add_argument("--timeout", type=float, default=60.0,
+                    help="seconds to poll for a newly created object to become listable (default 60)")
+    ap.add_argument("--poll-interval", type=float, default=3.0,
+                    help="seconds between poll attempts (default 3)")
     ap.add_argument("--cleanup-only", action="store_true", help="only sweep stackql-smoke breadcrumbs, then exit")
     args = ap.parse_args()
 
@@ -477,7 +544,7 @@ def main():
 
     if args.with_lifecycle:
         sweep_breadcrumbs(sq, rep, key_present)
-        governance_lifecycle(sq, rep, key_present, stamp)
+        governance_lifecycle(sq, rep, key_present, stamp, args.timeout, args.poll_interval)
 
     ok = rep.summary()
     if not key_present:

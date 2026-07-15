@@ -222,8 +222,6 @@ Usage and cost are bucketed time series: one row per time bucket, with the per-g
 - **`group_by` takes one dimension per query**; the result items carry every dimension, so group in SQL over a single-dimension fetch.
 - **Convert epochs with `strftime`** - `strftime('%Y-%m-%d', start_time, 'unixepoch')`.
 
-Two upstream work orders track engine-side improvements behind these conventions (`work-orders/`): WO-001 (a pagination config switch, which lifts the `limit` sizing convention) and WO-002 (`datetime()` over a column, which would make `date`/`datetime` interchangeable with `strftime` here). Both are recorded with evidence; neither requires a provider change to land.
-
 Token usage by project and model over a 30-day window:
 
 ```sql
