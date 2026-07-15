@@ -153,3 +153,7 @@ stackql-server.log
 
 # python venv for the smoke tests
 .venv/
+
+# python bytecode
+__pycache__/
+*.py[cod]
