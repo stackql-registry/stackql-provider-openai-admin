@@ -43,7 +43,11 @@ stackql.exe shell --auth=$Auth
 ```
 </details>
 
-## Token spend and cost as rows
+## Example Queries
+
+Try the following queries using `stackql shell`, or run them from a script or CI pipeline with `stackql exec`.
+
+### Token spend and cost as rows
 
 Usage and cost are bucketed time series. Each row is one time bucket (`start_time`, `end_time`) and its `results` array holds the per-group breakdown, fanned out with `json_each` and read with `json_extract`.  
 
@@ -90,7 +94,7 @@ WHERE start_time = 1781481600
   AND "limit" = 180;
 ```
 
-## Governance and audit
+### Governance and audit
 
 Projects, their service accounts, and their API keys as rows:
 
