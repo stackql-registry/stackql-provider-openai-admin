@@ -33,6 +33,7 @@ Nothing in this provider consumes tokens - usage and cost are read, never genera
 
 total services: __10__  
 total resources: __39__  
+source project: __[stackql-provider-openai-admin](https://github.com/stackql-registry/stackql-provider-openai-admin)__  
 
 :::
 
